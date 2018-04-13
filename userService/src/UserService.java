@@ -1,14 +1,15 @@
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
-import java.io.IOException;
-import java.io.OutputStreamWriter;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.util.Iterator;
 
 /**
  * @Author Gudbrand Schistad
@@ -18,10 +19,6 @@ public class UserService {
     private static volatile int userid = 1;
 
     public static void main(String[] args) {
-        int port = 0;
-        String masterHost = ""; // URL for user service
-        int masterPort = 0;
-        int  nodeId = 1;
         NodeInfo nodeInfo = null;
 
         if(args.length >= 2 && args[0].equals("-port")){
@@ -46,20 +43,27 @@ public class UserService {
         FrontendNodeData frontendNodeData = new FrontendNodeData();
         UserServiceNodeData userServiceNodeData = new UserServiceNodeData();
 
-        if(!nodeInfo.isMaster()){
-            String path = "/register/userservice";
-            registerUserServiceRequest(nodeInfo, path);
-        }
-        System.out.println(nodeInfo.getPort());
+
         Server server = new Server(nodeInfo.getPort());
         ServletHandler handler = new ServletHandler();
         server.setHandler(handler);
         UserDataMap userDataMap = new UserDataMap();
         handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userid, properties)), "/*");
         handler.addServletWithMapping(new ServletHolder(new NodeRegistationServlet(nodeInfo, frontendNodeData, userServiceNodeData)), "/register/*");
+        handler.addServletWithMapping(HeartServlet.class, "/alive");
+        handler.addServletWithMapping(new ServletHolder(new NodeRemoverServlet(userServiceNodeData, frontendNodeData)), "/remove/*");
 
+        if(!nodeInfo.isMaster()){
+            String path = "/register/userservice";
+            boolean success = registerUserServiceRequest(nodeInfo, path, frontendNodeData, userServiceNodeData);
+            if(!success){
+                System.out.println("Unable to register node with master");
+                System.exit(-1);
+            }
+        }
         System.out.println("Starting server on port " + nodeInfo.getPort() + "...");
         System.out.println("Server is master: " + nodeInfo.isMaster() + "...");
+        new Thread(new HeartBeat(nodeInfo, userServiceNodeData, frontendNodeData)).start();
 
 
         try {
@@ -77,18 +81,20 @@ public class UserService {
      * Method used to send post requests.
      * Build url for target path
      * Sets application type, and opens connection.
-     * @param masterHost target host
      * @param path api path
      * @throws IOException
      */
-    private static boolean registerUserServiceRequest(NodeInfo nodeInfo, String path) {
+    private static boolean registerUserServiceRequest(NodeInfo nodeInfo, String path, FrontendNodeData frontendNodeData, UserServiceNodeData userServiceNodeData) {
         System.out.println("Registering userService with master...");
         JSONObject body = new JSONObject();
+        ServletHelper helper = new ServletHelper();
+
         try {
             body.put("host", nodeInfo.getHost());
             body.put("port", nodeInfo.getPort());
 
             String url = "http://" + nodeInfo.getMasterHost() + ":" + nodeInfo.getMasterPort() + path;
+            System.out.println(url);
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
             con.setDoOutput(true);
@@ -99,11 +105,42 @@ public class UserService {
             wr.flush();
             wr.close();
             System.out.println(con.getResponseCode());
-            con.getResponseCode();
+            if (con.getResponseCode() == 200){
+                //Add response
+                JSONObject responseData = helper.stringToJsonObject(helper.readInputStream(con));
+                addFrontendNodes(responseData, frontendNodeData);
+                addUserServiceNodes(responseData, userServiceNodeData);
+            }
         } catch (IOException e) {
             // e.printStackTrace();
             return false;
         }
         return true;
+    }
+
+    private static void addFrontendNodes(JSONObject responseData, FrontendNodeData frontendNodeData){
+        JSONArray frontendServices = (JSONArray) responseData.get("frontends");
+
+        Iterator i = frontendServices.iterator();
+        while (i.hasNext()) {
+            JSONObject node = (JSONObject) i.next();
+            String host = node.get("host").toString();
+            int port = Integer.valueOf(node.get("port").toString());
+            NodeInfo info = new NodeInfo(port,host);
+            frontendNodeData.addNode(info);
+        }
+    }
+
+    private static void addUserServiceNodes(JSONObject responseData, UserServiceNodeData userServiceNodeData){
+        JSONArray userservices = (JSONArray) responseData.get("userservices");
+
+        Iterator i = userservices.iterator();
+        while (i.hasNext()) {
+            JSONObject node = (JSONObject) i.next();
+            String host = node.get("host").toString();
+            int port = Integer.valueOf(node.get("port").toString());
+            NodeInfo info = new NodeInfo(port,host);
+            userServiceNodeData.addNode(info);
+        }
     }
 }

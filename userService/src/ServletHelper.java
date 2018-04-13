@@ -5,6 +5,7 @@ import org.json.simple.parser.ParseException;
 import javax.servlet.http.HttpServletRequest;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -50,11 +51,11 @@ public class ServletHelper {
         return obj;
     }
 
-    public static void sendPostRequest(NodeInfo nodeInfo, String path, String body) {
-        System.out.println("Registering userService with master...");
+    public void sendPostRequest(NodeInfo nodeInfo, String path, String body) {
         try {
 
             String url = "http://" + nodeInfo.getHost() + ":" + nodeInfo.getPort() + path;
+            System.out.println(url);
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
             con.setDoOutput(true);
@@ -68,5 +69,23 @@ public class ServletHelper {
         } catch (IOException e) {
             // e.printStackTrace();
         }
+    }
+
+    /**
+     * Method to read the inputstream and append it to a string
+     * @param con between services
+     * @return response string
+     */
+    public static String readInputStream(HttpURLConnection con) throws IOException {
+        StringBuffer response = new StringBuffer();
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+        String inputLine;
+
+        while ((inputLine = in.readLine()) != null) {
+            response.append(inputLine);
+        }
+        in.close();
+        return response.toString();
     }
 }

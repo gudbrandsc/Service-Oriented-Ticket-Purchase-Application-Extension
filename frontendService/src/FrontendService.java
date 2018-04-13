@@ -32,30 +32,34 @@ public class FrontendService {
 
         UserServiceMaster masterInfo = new UserServiceMaster(masterHost, masterPort);
         PropertiesLoader properties = new PropertiesLoader();
-        if(registerFrontendRequest(masterHost, masterPort,"/register/frontend", port)){
-
-            Server server = new Server(port);
-            ServletHandler handler = new ServletHandler();
-            server.setHandler(handler);
-            handler.addServletWithMapping(new ServletHolder(new GetEventsServlet(properties)), "/events");
-            handler.addServletWithMapping(new ServletHolder(new EventServlet(properties)), "/events/*");
-            handler.addServletWithMapping(new ServletHolder(new UserServlet(properties, masterInfo)), "/users/*");
-            handler.addServletWithMapping(new ServletHolder(new MasterHandler(masterInfo)), "/master/*");
 
 
-            System.out.println("Starting server on port " + port + "...");
+        Server server = new Server(port);
+        ServletHandler handler = new ServletHandler();
+        server.setHandler(handler);
+        handler.addServletWithMapping(new ServletHolder(new GetEventsServlet(properties)), "/events");
+        handler.addServletWithMapping(new ServletHolder(new EventServlet(properties)), "/events/*");
+        handler.addServletWithMapping(new ServletHolder(new UserServlet(properties, masterInfo)), "/users/*");
+        handler.addServletWithMapping(new ServletHolder(new MasterHandler(masterInfo)), "/master/*");
+        handler.addServletWithMapping(HeartServlet.class, "/alive");
 
-            try {
-                server.start();
-                server.join();
-            } catch (Exception ex) {
-                System.out.println("Interrupted while running server.");
-                System.exit(-1);
-            }
-        }else{
+
+        if(!registerFrontendRequest(masterHost, masterPort,"/register/frontend", port)) {
             System.out.println("Registration failed..");
             System.exit(-1);
+
         }
+
+        System.out.println("Starting server on port " + port + "...");
+
+        try {
+            server.start();
+            server.join();
+        } catch (Exception ex) {
+            System.out.println("Interrupted while running server.");
+            System.exit(-1);
+        }
+
     }
 
     /**
@@ -86,7 +90,7 @@ public class FrontendService {
             System.out.println(con.getResponseCode());
             con.getResponseCode();
         } catch (IOException e) {
-           // e.printStackTrace();
+            // e.printStackTrace();
             return false;
         }
         return true;

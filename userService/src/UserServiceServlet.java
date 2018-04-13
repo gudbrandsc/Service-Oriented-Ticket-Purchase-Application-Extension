@@ -23,12 +23,16 @@ public class UserServiceServlet extends HttpServlet{
     private UserDataMap userDataMap;
     private static volatile int userid;
     private PropertiesLoader properties;
+    private ServletHelper servletHelper;
 
+    //TODO refactor post
     /** Constructor */
     public UserServiceServlet(UserDataMap userDataMap, int userid, PropertiesLoader properties) {
         this.userDataMap = userDataMap;
         this.userid = userid;
         this.properties = properties;
+        this.servletHelper = new ServletHelper();
+
     }
 
     /**
@@ -95,7 +99,7 @@ public class UserServiceServlet extends HttpServlet{
 
         Matcher matchAdd = add.matcher(uri);
         Matcher matchTransfer = transfer.matcher(uri);
-        JSONObject requestBody = stringToJsonObject(requestToString(req));
+        JSONObject requestBody = servletHelper.stringToJsonObject(servletHelper.requestToString(req));
 
         if (matchAdd.matches()) {
             if(requestBody.containsKey("eventid") && requestBody.containsKey("tickets")){
@@ -153,41 +157,6 @@ public class UserServiceServlet extends HttpServlet{
         }
     }
 
-    /**
-     * Method used to read the body of a request
-     * @param req servlet request
-     * @return String of req body
-     * @throws IOException
-     */
-    private String requestToString(HttpServletRequest req) throws IOException {
-        StringBuffer sb = new StringBuffer();
-        String line;
-
-        BufferedReader in = req.getReader();
-
-        while ((line = in.readLine()) != null) {
-            sb.append(line);
-        }
-        String res = sb.toString();
-        in.close();
-        return res;
-    }
-
-    /**
-     * Method that parses a json string and returns a json object
-     * @param json String representation of json
-     * @return JSONObject
-     */
-    private JSONObject stringToJsonObject(String json){
-        JSONObject obj = null;
-        JSONParser parser = new JSONParser();
-        try {
-            obj = (JSONObject)parser.parse(json);
-        } catch (ParseException e) {
-            e.printStackTrace();
-        }
-        return obj;
-    }
 
     /** Synchronized method that transfers tickets between to users.
      * @param eventId Id of the events to transfer from
