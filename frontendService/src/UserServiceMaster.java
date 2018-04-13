@@ -1,4 +1,6 @@
+
 public class  UserServiceMaster {
+
     private String userHost;
     private int userPort;
 
@@ -7,11 +9,11 @@ public class  UserServiceMaster {
         this.userPort = userPort;
     }
 
-    public String getUserHost() {
+    public synchronized String getUserHost() {
         return userHost;
     }
 
-    public int getUserPort() {
+    public synchronized int getUserPort() {
         return this.userPort;
     }
 
