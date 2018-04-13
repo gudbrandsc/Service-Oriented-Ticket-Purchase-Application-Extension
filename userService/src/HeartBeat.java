@@ -3,7 +3,6 @@ import org.json.simple.JSONObject;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -51,7 +50,7 @@ public class HeartBeat implements Runnable{
             }
 
             try {
-                TimeUnit.SECONDS.sleep(1);
+                TimeUnit.SECONDS.sleep(2);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -70,6 +69,7 @@ public class HeartBeat implements Runnable{
             return 401;
         }
     }
+
     private void removeDeadNode(NodeInfo rmNode, List<NodeInfo> slaves, String path){
         JSONObject obj = new JSONObject();
         obj.put("host", rmNode.getHost());

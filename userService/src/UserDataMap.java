@@ -16,8 +16,11 @@ public class UserDataMap {
      * @param userId Id of the user (key)
      * @param user User object
      */
-    public void addUser(int userId, User user){
-        this.userData.put(userId,user);
+    public synchronized void addUser(int userId, User user){
+        if(!checkIfUserExist(userId)) {
+            this.userData.put(userId, user);
+        }
+        System.out.println("userAdded");
     }
 
     /**

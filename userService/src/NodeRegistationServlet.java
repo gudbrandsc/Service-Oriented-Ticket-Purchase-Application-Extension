@@ -80,7 +80,7 @@ public class NodeRegistationServlet extends HttpServlet {
         }
         obj.put("frontends", frontends);
         obj.put("userservices", userServices);
-        System.out.println("resp : \n" + obj.toJSONString());
+//        System.out.println("resp : \n" + obj.toJSONString());
         return obj.toJSONString();
 
     }
@@ -98,7 +98,6 @@ public class NodeRegistationServlet extends HttpServlet {
 
     private void addUserService(HttpServletResponse resp, JSONObject requestBody, NodeInfo newNode) throws IOException {
         if(!userServiceNodeData.checkIfNodeExist(newNode)){
-            System.out.println("Before if" + this.nodeInfo.isMaster());
             if (this.nodeInfo.isMaster()) { //TODO add return 200 if n nodes return 200
                 String path = "/register/userservice";
                 replicateData(resp, path, requestBody);
@@ -112,7 +111,6 @@ public class NodeRegistationServlet extends HttpServlet {
         PrintWriter pw = resp.getWriter();
 
         for(NodeInfo nodeInfo : userServiceNodeData.getUserServicesListCopy()){
-            System.out.println("Replicate");
             servletHelper.sendPostRequest(nodeInfo, path, requestBody.toString());
         }
 

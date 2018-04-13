@@ -22,16 +22,16 @@ import java.util.regex.Pattern;
 public class UserServiceServlet extends HttpServlet{
     private UserDataMap userDataMap;
     private static volatile int userid;
-    private PropertiesLoader properties;
     private ServletHelper servletHelper;
+    private UserServiceNodeData userServiceNodeData;
 
     //TODO refactor post
     /** Constructor */
-    public UserServiceServlet(UserDataMap userDataMap, int userid, PropertiesLoader properties) {
+    public UserServiceServlet(UserDataMap userDataMap, int userid, UserServiceNodeData userServiceNodeData) {
         this.userDataMap = userDataMap;
         this.userid = userid;
-        this.properties = properties;
         this.servletHelper = new ServletHelper();
+        this.userServiceNodeData = userServiceNodeData;
 
     }
 
@@ -69,6 +69,7 @@ public class UserServiceServlet extends HttpServlet{
                     }
                 }
                 json.put("tickets", eventarray);
+                resp.setContentType("application/json; charset=UTF-8");
                 out.println(json);
                 out.flush();
                 resp.setStatus(HttpStatus.OK_200);
@@ -102,54 +103,47 @@ public class UserServiceServlet extends HttpServlet{
         JSONObject requestBody = servletHelper.stringToJsonObject(servletHelper.requestToString(req));
 
         if (matchAdd.matches()) {
-            if(requestBody.containsKey("eventid") && requestBody.containsKey("tickets")){
-                int userId = Integer.parseInt(matchAdd.group(1));
-                int eventid = Integer.parseInt(requestBody.get("eventid").toString());
-                int tickets = Integer.parseInt(requestBody.get("tickets").toString());
-                if(userDataMap.checkIfUserExist(userId)) {
-                    userDataMap.getUser(userId).addTickets(eventid, tickets);
-                    resp.setStatus(HttpStatus.OK_200);
-                }else{
-                    resp.setStatus(HttpStatus.BAD_REQUEST_400);
-                }
+            addTicketsHandler(resp, requestBody, Integer.valueOf(matchAdd.group(1)));
+        }else if(matchTransfer.matches()){
+            transfereTicketsHandler(resp, requestBody, Integer.valueOf(matchAdd.group(1)));
+        }else if(req.getRequestURI().equals("/create")) {
+            createUserHandler(resp, requestBody, printWriter);
+        }else{
+            resp.setStatus(HttpStatus.BAD_REQUEST_400);
+        }
+    }
+
+    private void createUserHandler(HttpServletResponse resp, JSONObject requestBody,  PrintWriter printWriter){
+        if(requestBody.containsKey("username")){
+            String username = requestBody.get("username").toString();
+            if(!(username.isEmpty())){
+                User user = new User(userid, username);
+                addUser(userid, user);
+                String path = "/create";
+                resp.setStatus(updatedAllSlaves(resp, path,requestBody.toJSONString()));
+
+                JSONObject respJSON = new JSONObject();
+                respJSON.put("userid", userid);
+                printWriter.println(respJSON.toString());
+                printWriter.flush();
+                userid++;
             }else{
                 resp.setStatus(HttpStatus.BAD_REQUEST_400);
-            }
-        }else if(matchTransfer.matches()){
-            if(requestBody.containsKey("eventid") && requestBody.containsKey("tickets") && requestBody.containsKey("targetuser")){
-                int userId = Integer.parseInt(matchTransfer.group(1));
-                int eventid = Integer.parseInt(requestBody.get("eventid").toString());
-                int tickets = Integer.parseInt(requestBody.get("tickets").toString());
-                int targetuser = Integer.parseInt(requestBody.get("targetuser").toString());
-                if(userDataMap.checkIfUserExist(targetuser) && userDataMap.checkIfUserExist(userId)) {
-                    if (transferTickets(eventid, userId, targetuser, tickets)) {
-                        resp.setStatus(HttpStatus.OK_200);
-                    } else {
-                        resp.setStatus(HttpStatus.BAD_REQUEST_400);
-                    }
-                }else {
-                    resp.setStatus(HttpStatus.BAD_REQUEST_400);
-                }
-            }else {
-                resp.setStatus(HttpStatus.BAD_REQUEST_400);
-            }
-        }else if(req.getRequestURI().equals("/create")) {
-            if(requestBody.containsKey("username")){
-                String username = requestBody.get("username").toString();
-                if(!(username.isEmpty())){
-                    User user = new User(userid, username);
-                    userDataMap.addUser(userid, user);
-                    resp.setStatus(HttpStatus.OK_200);
-                    JSONObject respJSON = new JSONObject();
-                    respJSON.put("userid", userid);
-                    printWriter.println(respJSON.toString());
-                    printWriter.flush();
-                    userid++;
-                }else{
-                    resp.setStatus(HttpStatus.BAD_REQUEST_400);
 
-                }
-            } else{
+            }
+        } else{
+            resp.setStatus(HttpStatus.BAD_REQUEST_400);
+        }
+    }
+
+    private void addTicketsHandler(HttpServletResponse resp,JSONObject requestBody, int userId){
+        if(requestBody.containsKey("eventid") && requestBody.containsKey("tickets")){
+            int eventid = Integer.parseInt(requestBody.get("eventid").toString());
+            int tickets = Integer.parseInt(requestBody.get("tickets").toString());
+            if(userDataMap.checkIfUserExist(userId)) {
+                userDataMap.getUser(userId).addTickets(eventid, tickets);
+                resp.setStatus(HttpStatus.OK_200);
+            }else{
                 resp.setStatus(HttpStatus.BAD_REQUEST_400);
             }
         }else{
@@ -157,6 +151,41 @@ public class UserServiceServlet extends HttpServlet{
         }
     }
 
+    private void transfereTicketsHandler(HttpServletResponse resp,JSONObject requestBody, int userId){
+        if(requestBody.containsKey("eventid") && requestBody.containsKey("tickets") && requestBody.containsKey("targetuser")){
+            int eventid = Integer.parseInt(requestBody.get("eventid").toString());
+            int tickets = Integer.parseInt(requestBody.get("tickets").toString());
+            int targetuser = Integer.parseInt(requestBody.get("targetuser").toString());
+            if(userDataMap.checkIfUserExist(targetuser) && userDataMap.checkIfUserExist(userId)) {
+                if (transferTickets(eventid, userId, targetuser, tickets)) {
+                    resp.setStatus(HttpStatus.OK_200);
+                } else {
+                    resp.setStatus(HttpStatus.BAD_REQUEST_400);
+                }
+            }else {
+                resp.setStatus(HttpStatus.BAD_REQUEST_400);
+            }
+        }else {
+            resp.setStatus(HttpStatus.BAD_REQUEST_400);
+        }
+    }
+    private synchronized void addUser(int userid, User user){
+        userDataMap.addUser(userid, user);
+
+    }
+    private int updatedAllSlaves(HttpServletResponse resp, String path, String body){
+        int countSuccess = 0;
+        for(NodeInfo slave : userServiceNodeData.getUserServicesListCopy()){
+           int status = servletHelper.sendPostRequest(slave, path, body);
+           if(status == 200){
+               countSuccess++;
+           }
+        }
+        if (countSuccess == userServiceNodeData.getUserServicesListCopy().size()){
+            return HttpStatus.OK_200;
+        }
+        return HttpStatus.BAD_REQUEST_400;
+    }
 
     /** Synchronized method that transfers tickets between to users.
      * @param eventId Id of the events to transfer from

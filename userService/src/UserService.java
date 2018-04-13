@@ -48,7 +48,7 @@ public class UserService {
         ServletHandler handler = new ServletHandler();
         server.setHandler(handler);
         UserDataMap userDataMap = new UserDataMap();
-        handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userid, properties)), "/*");
+        handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userid, userServiceNodeData)), "/*");
         handler.addServletWithMapping(new ServletHolder(new NodeRegistationServlet(nodeInfo, frontendNodeData, userServiceNodeData)), "/register/*");
         handler.addServletWithMapping(HeartServlet.class, "/alive");
         handler.addServletWithMapping(new ServletHolder(new NodeRemoverServlet(userServiceNodeData, frontendNodeData)), "/remove/*");

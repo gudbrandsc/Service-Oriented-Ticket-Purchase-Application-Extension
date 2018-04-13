@@ -51,7 +51,7 @@ public class ServletHelper {
         return obj;
     }
 
-    public void sendPostRequest(NodeInfo nodeInfo, String path, String body) {
+    public int sendPostRequest(NodeInfo nodeInfo, String path, String body) {
         try {
 
             String url = "http://" + nodeInfo.getHost() + ":" + nodeInfo.getPort() + path;
@@ -65,8 +65,9 @@ public class ServletHelper {
             wr.write(body);
             wr.flush();
             wr.close();
-            con.getResponseCode();
+           return con.getResponseCode();
         } catch (IOException e) {
+            return 401;
             // e.printStackTrace();
         }
     }
