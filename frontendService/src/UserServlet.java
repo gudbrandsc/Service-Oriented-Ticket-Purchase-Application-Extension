@@ -1,4 +1,5 @@
 import org.eclipse.jetty.http.HttpStatus;
+import org.eclipse.jetty.servlet.ServletHolder;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -21,6 +22,7 @@ import java.util.regex.Pattern;
 public class UserServlet extends HttpServlet{
     private PropertiesLoader properties;
     private UserServiceMaster masterInfo;
+    //private ServletHolder servletHolder;
 
     /** Constructor */
     public UserServlet(PropertiesLoader properties, UserServiceMaster masterInfo){
@@ -39,7 +41,6 @@ public class UserServlet extends HttpServlet{
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         PrintWriter printWriter = resp.getWriter();
-        System.out.println(masterInfo.getUserHost() +" and " + masterInfo.getUserPort());
         JSONObject userObject = sendGetRequest(masterInfo.getUserHost(), masterInfo.getUserPort() , req.getPathInfo().substring(1), resp);
         if(userObject != null){
             JSONObject json = new JSONObject();
@@ -54,7 +55,7 @@ public class UserServlet extends HttpServlet{
                 JSONObject res = iterator.next();
                 long eventid = Long.parseLong(res.get("eventid").toString());
 
-                JSONObject eventObject = sendGetRequest(masterInfo.getUserHost(), masterInfo.getUserPort(), String.valueOf(eventid), resp);
+                JSONObject eventObject = sendGetRequest(properties.getEventhost(), Integer.parseInt(properties.getEventport()), String.valueOf(eventid), resp);
                 if (eventObject != null) {
                     updatedEventarray.add(eventObject);
                 }
@@ -162,6 +163,7 @@ public class UserServlet extends HttpServlet{
      */
     private JSONObject sendGetRequest(String masterHost, int masterPort, String path, HttpServletResponse resp) throws IOException {
         String url = "http://" + masterHost + ":" + masterPort + "/" + path;
+        System.out.println(url);
         URL obj = new URL(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
         con.setRequestMethod("GET");
@@ -179,7 +181,6 @@ public class UserServlet extends HttpServlet{
      * Method used to send post requests.
      * Build url for target path
      * Sets application type, and opens connection.
-     * @param masterURL target host
      * @param path api path
      * @param resp Http response
      * @param req Http request

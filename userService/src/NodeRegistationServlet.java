@@ -49,7 +49,6 @@ public class NodeRegistationServlet extends HttpServlet {
      */
     @Override
     public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        System.out.println("Got request");
         String pathInfo = req.getPathInfo();
         JSONObject requestBody = servletHelper.stringToJsonObject(servletHelper.requestToString(req));
         NodeInfo newNode = new NodeInfo(Integer.valueOf(requestBody.get("port").toString()), requestBody.get("host").toString());
@@ -82,6 +81,7 @@ public class NodeRegistationServlet extends HttpServlet {
         obj.put("userservices", userServices);
 //        System.out.println("resp : \n" + obj.toJSONString());
         return obj.toJSONString();
+        //TODO Add all users too
 
     }
 
@@ -111,7 +111,7 @@ public class NodeRegistationServlet extends HttpServlet {
         PrintWriter pw = resp.getWriter();
 
         for(NodeInfo nodeInfo : userServiceNodeData.getUserServicesListCopy()){
-            servletHelper.sendPostRequest(nodeInfo, path, requestBody.toString());
+            servletHelper.sendPostRequest(nodeInfo.getHost(),nodeInfo.getPort(), path, requestBody.toString());
         }
 
         pw.write(buildResponse());

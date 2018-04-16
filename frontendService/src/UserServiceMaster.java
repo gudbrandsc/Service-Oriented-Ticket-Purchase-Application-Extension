@@ -18,6 +18,7 @@ public class  UserServiceMaster {
     }
 
     public synchronized void setNewMaster(String userHost, int userPort) {
+        System.out.println("Updating master to: " + userHost +":"+ userPort);
         this.userHost = userHost;
         this.userPort = userPort;
     }

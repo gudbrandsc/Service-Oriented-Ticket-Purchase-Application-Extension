@@ -32,7 +32,9 @@ public class NodeInfo {
     public synchronized int getMasterPort() {
         return this.masterPort;
     }
+
     public synchronized void updateMaster(String host, int port){
+        System.out.println("MESSAGE: Updating master to: " + host + ":" + port);
         this.masterHost = host;
         this.masterPort = port;
     }

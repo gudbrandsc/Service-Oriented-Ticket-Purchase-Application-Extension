@@ -12,13 +12,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class User {
     private int userid;
     private String username;
-    JSONArray jsonArray = null;
+    JSONArray ticketArray = null;
 
     /*** constructor*/
     public User(int userid, String username) {
         this.userid = userid;
         this.username = username;
-        this.jsonArray = new JSONArray();
+        this.ticketArray = new JSONArray();
     }
 
     /**
@@ -29,8 +29,7 @@ public class User {
      */
     public boolean validateNumTickets(int eventid, int numTickets) {
         int count = 0;
-        Iterator<JSONObject> it = jsonArray.iterator();
-
+        Iterator<JSONObject> it = this.ticketArray.iterator();
         while(it.hasNext()){
             JSONObject obj = it.next();
             int value = (int) Long.parseLong(obj.get("eventid").toString());
@@ -60,7 +59,7 @@ public class User {
         for(int i = 0; i < numTickets; i++){
             JSONObject obj = new JSONObject();
             obj.put("eventid", eventid);
-            jsonArray.add(obj);
+            ticketArray.add(obj);
         }
     }
 
@@ -76,7 +75,7 @@ public class User {
         int count = 0;
         boolean removedAll = false;
         JSONArray newArray = new JSONArray();
-        Iterator<JSONObject> it = jsonArray.iterator();
+        Iterator<JSONObject> it = ticketArray.iterator();
 
         while(it.hasNext()){
             if(count == numTickets){
@@ -92,8 +91,8 @@ public class User {
             }
             count++;
         }
-        jsonArray.clear();
-        jsonArray.addAll(newArray);
+        ticketArray.clear();
+        ticketArray.addAll(newArray);
     }
 
     /**
@@ -101,7 +100,15 @@ public class User {
      * @return User hashmap of all events
      */
     public JSONArray getEvents() {
-        return this.jsonArray;
+        return this.ticketArray;
+    }
+
+    public int getUserid() {
+        return userid;
+    }
+
+    public JSONArray getTicketArray() {
+        return ticketArray;
     }
 
     /**
@@ -109,7 +116,7 @@ public class User {
      * @return The size of events map
      */
     public int getNumEventsSize() {
-        return this.jsonArray.size();
+        return this.ticketArray.size();
     }
 
 }

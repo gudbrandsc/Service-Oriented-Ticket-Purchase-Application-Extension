@@ -30,7 +30,6 @@ public class NodeRemoverServlet extends HttpServlet {
         System.out.println(pathInfo);
         JSONObject requestBody = servletHelper.stringToJsonObject(servletHelper.requestToString(req));
         NodeInfo removeNode = new NodeInfo(Integer.valueOf(requestBody.get("port").toString()), requestBody.get("host").toString());
-        System.out.println("Got remove request for node: " + removeNode.getHost() +":"+ removeNode.getPort());
         if(pathInfo.equals("/userservice")) {
             removeUserServiceNode(removeNode);
             resp.setStatus(HttpStatus.OK_200);

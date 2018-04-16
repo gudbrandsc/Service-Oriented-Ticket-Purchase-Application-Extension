@@ -20,11 +20,14 @@ import java.util.regex.Pattern;
  */
 public class EventServlet extends HttpServlet{
     private PropertiesLoader properties;
+    private UserServiceMaster masterInfo;
+
 
     /** Constructor*/
-    public EventServlet(PropertiesLoader properties){
+    public EventServlet(PropertiesLoader properties, UserServiceMaster masterInfo){
 
         this.properties = properties;
+        this.masterInfo = masterInfo;
     }
 
     /**
@@ -70,17 +73,19 @@ public class EventServlet extends HttpServlet{
         Matcher m = p.matcher(pathInfo);
 
         if(pathInfo.equals("/create")){
+            System.out.println(pathInfo);
             sendPostRequestAndPrint(properties.getEventhost(), properties.getEventport(), pathInfo, resp, req);
         }else if(m.matches()){
             int  eventid = Integer.parseInt(m.group(1));
             int  userid = Integer.parseInt(m.group(2));
-            String path = "/purchase/" + eventid;
+            String path = "/"+ userid + "/tickets/add";
             JSONObject object = new JSONObject();
             JSONObject reqObj = stringToJsonObject(requestToString(req));
             object.put("tickets", reqObj.get("tickets"));
-            object.put("userid", userid);
             object.put("eventid", eventid);
-            sendPostRequest(properties.getEventhost(), properties.getEventport(), path, resp, object.toString());
+            System.out.println(masterInfo.getUserPort());
+            System.out.println(object.toJSONString());
+            sendPostRequest(masterInfo.getUserHost(),masterInfo.getUserPort(),path,resp,object.toJSONString());
         }else{
             resp.setStatus(HttpStatus.BAD_REQUEST_400);
         }
@@ -175,7 +180,7 @@ public class EventServlet extends HttpServlet{
      * @param req Http request
      * @throws IOException
      */
-    private void sendPostRequest(String host, String port, String path, HttpServletResponse resp, HttpServletRequest req) throws IOException {
+    private void sendPostRequest(String host, int port, String path, HttpServletResponse resp, HttpServletRequest req) throws IOException {
         String url = "http://" + host + ":" + port + "/" + path;
         URL obj = new URL(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
@@ -200,9 +205,10 @@ public class EventServlet extends HttpServlet{
      * @param json json string
      * @throws IOException
      */
-    private void sendPostRequest(String host, String port, String path, HttpServletResponse resp, String json) throws IOException {
+    private void sendPostRequest(String host, int port, String path, HttpServletResponse resp, String json) throws IOException {
         String url = "http://" + host + ":" + port + path;
         URL obj = new URL(url);
+        System.out.println(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
         con.setDoOutput(true);
         con.setRequestMethod("POST");
@@ -227,6 +233,7 @@ public class EventServlet extends HttpServlet{
     private void sendPostRequestAndPrint(String host, String port, String path, HttpServletResponse resp, HttpServletRequest req) throws IOException {
         String url = "http://" + host + ":" + port + path;
         URL obj = new URL(url);
+        System.out.println(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
         con.setDoOutput(true);
         con.setRequestMethod("POST");

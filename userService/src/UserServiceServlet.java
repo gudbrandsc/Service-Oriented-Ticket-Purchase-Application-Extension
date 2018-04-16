@@ -24,14 +24,18 @@ public class UserServiceServlet extends HttpServlet{
     private static volatile int userid;
     private ServletHelper servletHelper;
     private UserServiceNodeData userServiceNodeData;
+    private NodeInfo nodeInfo;
+    private PropertiesLoader eventService;
 
     //TODO refactor post
     /** Constructor */
-    public UserServiceServlet(UserDataMap userDataMap, int userid, UserServiceNodeData userServiceNodeData) {
+    public UserServiceServlet(UserDataMap userDataMap, int userid, UserServiceNodeData userServiceNodeData, NodeInfo nodeInfo, PropertiesLoader eventService) {
         this.userDataMap = userDataMap;
         this.userid = userid;
         this.servletHelper = new ServletHelper();
         this.userServiceNodeData = userServiceNodeData;
+        this.nodeInfo = nodeInfo;
+        this.eventService = eventService;
 
     }
 
@@ -105,7 +109,7 @@ public class UserServiceServlet extends HttpServlet{
         if (matchAdd.matches()) {
             addTicketsHandler(resp, requestBody, Integer.valueOf(matchAdd.group(1)));
         }else if(matchTransfer.matches()){
-            transfereTicketsHandler(resp, requestBody, Integer.valueOf(matchAdd.group(1)));
+            transfereTicketsHandler(resp, requestBody, Integer.valueOf(matchTransfer.group(1)));
         }else if(req.getRequestURI().equals("/create")) {
             createUserHandler(resp, requestBody, printWriter);
         }else{
@@ -120,8 +124,12 @@ public class UserServiceServlet extends HttpServlet{
                 User user = new User(userid, username);
                 addUser(userid, user);
                 String path = "/create";
-                resp.setStatus(updatedAllSlaves(resp, path,requestBody.toJSONString()));
-
+                if(nodeInfo.isMaster()) {
+                    resp.setStatus(updatedAllSlaves(resp, path, requestBody.toJSONString()));
+                }else {
+                    resp.setStatus(HttpStatus.OK_200);
+                }
+                //TODO if 400 then remove slave
                 JSONObject respJSON = new JSONObject();
                 respJSON.put("userid", userid);
                 printWriter.println(respJSON.toString());
@@ -141,8 +149,21 @@ public class UserServiceServlet extends HttpServlet{
             int eventid = Integer.parseInt(requestBody.get("eventid").toString());
             int tickets = Integer.parseInt(requestBody.get("tickets").toString());
             if(userDataMap.checkIfUserExist(userId)) {
-                userDataMap.getUser(userId).addTickets(eventid, tickets);
-                resp.setStatus(HttpStatus.OK_200);
+                JSONObject eventRequestBody = new JSONObject();
+                eventRequestBody.put("userid", userId);
+                eventRequestBody.put("eventid", eventid);
+                eventRequestBody.put("tickets", tickets);
+                String purchaseEventPath = "/purchase/" + eventid;
+                System.out.println("Port:" + eventService.getEventport());
+                int eventPort = Integer.valueOf(eventService.getEventport());
+                System.out.println(eventRequestBody.toString());
+                if(servletHelper.sendPostRequest(eventService.getEventhost(), eventPort, purchaseEventPath, eventRequestBody.toJSONString()) == 200){
+                    userDataMap.getUser(userId).addTickets(eventid, tickets);
+                    String path = "/" + userId + "/tickets/add" ;
+                    resp.setStatus(updatedAllSlaves(resp, path, requestBody.toJSONString()));
+                }else{
+                    resp.setStatus(HttpStatus.BAD_REQUEST_400);
+                }
             }else{
                 resp.setStatus(HttpStatus.BAD_REQUEST_400);
             }
@@ -157,28 +178,37 @@ public class UserServiceServlet extends HttpServlet{
             int tickets = Integer.parseInt(requestBody.get("tickets").toString());
             int targetuser = Integer.parseInt(requestBody.get("targetuser").toString());
             if(userDataMap.checkIfUserExist(targetuser) && userDataMap.checkIfUserExist(userId)) {
+                System.out.println("found user");
                 if (transferTickets(eventid, userId, targetuser, tickets)) {
-                    resp.setStatus(HttpStatus.OK_200);
+                    System.out.println("Transfere tickets success");
+                    String path = " /" + userId + "/tickets/transfer";
+                    resp.setStatus(updatedAllSlaves(resp, path, requestBody.toJSONString()));
                 } else {
                     resp.setStatus(HttpStatus.BAD_REQUEST_400);
+                    System.out.println("Fail transfere");
+
                 }
             }else {
+                System.out.println("User nor exist");
                 resp.setStatus(HttpStatus.BAD_REQUEST_400);
             }
         }else {
+            System.out.println("requbody");
+
             resp.setStatus(HttpStatus.BAD_REQUEST_400);
         }
     }
-    private synchronized void addUser(int userid, User user){
-        userDataMap.addUser(userid, user);
 
-    }
+
+
     private int updatedAllSlaves(HttpServletResponse resp, String path, String body){
         int countSuccess = 0;
         for(NodeInfo slave : userServiceNodeData.getUserServicesListCopy()){
-           int status = servletHelper.sendPostRequest(slave, path, body);
+           int status = servletHelper.sendPostRequest(slave.getHost(),slave.getPort(), path, body);
            if(status == 200){
                countSuccess++;
+           }else {
+               //Remove node
            }
         }
         if (countSuccess == userServiceNodeData.getUserServicesListCopy().size()){
@@ -200,5 +230,10 @@ public class UserServiceServlet extends HttpServlet{
             return true;
         }
         return false;
+    }
+
+    private synchronized void addUser(int userid, User user){
+        userDataMap.addUser(userid, user);
+
     }
 }

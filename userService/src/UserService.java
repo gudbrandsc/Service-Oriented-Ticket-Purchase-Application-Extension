@@ -42,16 +42,19 @@ public class UserService {
         PropertiesLoader properties = new PropertiesLoader();
         FrontendNodeData frontendNodeData = new FrontendNodeData();
         UserServiceNodeData userServiceNodeData = new UserServiceNodeData();
+        UserDataMap userDataMap = new UserDataMap();
+        NodeElector nodeElector = new NodeElector(userServiceNodeData, nodeInfo, frontendNodeData, userDataMap);
 
 
         Server server = new Server(nodeInfo.getPort());
         ServletHandler handler = new ServletHandler();
         server.setHandler(handler);
-        UserDataMap userDataMap = new UserDataMap();
-        handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userid, userServiceNodeData)), "/*");
+        handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userid, userServiceNodeData, nodeInfo,properties)), "/*");
         handler.addServletWithMapping(new ServletHolder(new NodeRegistationServlet(nodeInfo, frontendNodeData, userServiceNodeData)), "/register/*");
         handler.addServletWithMapping(HeartServlet.class, "/alive");
         handler.addServletWithMapping(new ServletHolder(new NodeRemoverServlet(userServiceNodeData, frontendNodeData)), "/remove/*");
+        handler.addServletWithMapping(new ServletHolder(new ElectionServlet(nodeInfo,nodeElector)), "/election/*");
+
 
         if(!nodeInfo.isMaster()){
             String path = "/register/userservice";
@@ -63,7 +66,7 @@ public class UserService {
         }
         System.out.println("Starting server on port " + nodeInfo.getPort() + "...");
         System.out.println("Server is master: " + nodeInfo.isMaster() + "...");
-        new Thread(new HeartBeat(nodeInfo, userServiceNodeData, frontendNodeData)).start();
+        new Thread(new HeartBeat(nodeInfo, userServiceNodeData, frontendNodeData, nodeElector)).start();
 
 
         try {
@@ -85,7 +88,7 @@ public class UserService {
      * @throws IOException
      */
     private static boolean registerUserServiceRequest(NodeInfo nodeInfo, String path, FrontendNodeData frontendNodeData, UserServiceNodeData userServiceNodeData) {
-        System.out.println("Registering userService with master...");
+        System.out.println("MESSAGE: Registering userService with master...");
         JSONObject body = new JSONObject();
         ServletHelper helper = new ServletHelper();
 
@@ -119,6 +122,7 @@ public class UserService {
     }
 
     private static void addFrontendNodes(JSONObject responseData, FrontendNodeData frontendNodeData){
+        System.out.println("MESSAGE: Adding frontend nodes");
         JSONArray frontendServices = (JSONArray) responseData.get("frontends");
 
         Iterator i = frontendServices.iterator();
@@ -132,6 +136,7 @@ public class UserService {
     }
 
     private static void addUserServiceNodes(JSONObject responseData, UserServiceNodeData userServiceNodeData){
+        System.out.println("MESSAGE: Adding user services nodes");
         JSONArray userservices = (JSONArray) responseData.get("userservices");
 
         Iterator i = userservices.iterator();

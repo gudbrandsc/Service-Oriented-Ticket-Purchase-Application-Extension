@@ -51,12 +51,12 @@ public class ServletHelper {
         return obj;
     }
 
-    public int sendPostRequest(NodeInfo nodeInfo, String path, String body) {
+    public int sendPostRequest(String host, int port, String path, String body) {
         try {
 
-            String url = "http://" + nodeInfo.getHost() + ":" + nodeInfo.getPort() + path;
-            System.out.println(url);
+            String url = "http://" + host + ":" + port + path;
             URL obj = new URL(url);
+            System.out.println(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
             con.setDoOutput(true);
             con.setRequestMethod("POST");

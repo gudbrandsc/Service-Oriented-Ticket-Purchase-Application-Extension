@@ -12,7 +12,7 @@ public class UserServiceNodeData {
     }
 
     public synchronized void addNode(NodeInfo nodeInfo){
-            System.out.println("Added non existing node...");
+        System.out.println("MESSAGE: Adding user service " + nodeInfo.getHost() + ":" + nodeInfo.getPort());
             this.userServicesList.add(nodeInfo);
     }
 
@@ -34,7 +34,7 @@ public class UserServiceNodeData {
     }
 
     public synchronized void RemoveNode(NodeInfo nodeInfo){
-        System.out.println("Removing node...");
+        System.out.println("MESSAGE: Removing user service " + nodeInfo.getHost() + ":" + nodeInfo.getPort());
         List<NodeInfo> updatedList = Collections.synchronizedList(new ArrayList<NodeInfo>());
         for(NodeInfo info : this.userServicesList){
             if(info.getPort() != nodeInfo.getPort() && info.getHost() != nodeInfo.getHost()){

@@ -24,7 +24,7 @@ public class PropertiesLoader {
             // load a properties file
             prop.load(input);
             this.eventhost = prop.getProperty("eventhost");
-            this.eventhost = prop.getProperty("eventport");
+            this.eventport = prop.getProperty("eventport");
 
         } catch (IOException e) {
             e.printStackTrace();

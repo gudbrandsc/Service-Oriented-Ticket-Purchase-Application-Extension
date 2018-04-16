@@ -11,12 +11,14 @@ public class HeartBeat implements Runnable{
     private FrontendNodeData frontendNodeData;
     private NodeInfo nodeInfo;
     private ServletHelper servletHelper;
+    private NodeElector nodeElector;
 
-    public HeartBeat(NodeInfo nodeInfo, UserServiceNodeData userServiceNodeData, FrontendNodeData frontendNodeData) {
+    public HeartBeat(NodeInfo nodeInfo, UserServiceNodeData userServiceNodeData, FrontendNodeData frontendNodeData, NodeElector nodeElector) {
         this.userServiceNodeData = userServiceNodeData;
         this.servletHelper = new ServletHelper();
         this.nodeInfo = nodeInfo;
         this.frontendNodeData = frontendNodeData;
+        this.nodeElector = nodeElector;
     }
 
 
@@ -43,14 +45,15 @@ public class HeartBeat implements Runnable{
 
             } else {
                 if(checkIfalive(nodeInfo.getMasterHost(), nodeInfo.getMasterPort()) != 200){
-                    //TODO Start selecting new master
-                    System.out.println("dead Master");
-                }
+                    System.out.println("MESSAGE: Dead master -> starting election");
+                    nodeElector.startElection();
+                    //Also update data to mach data in master
 
+                }
             }
 
             try {
-                TimeUnit.SECONDS.sleep(2);
+                TimeUnit.SECONDS.sleep(5);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -74,9 +77,9 @@ public class HeartBeat implements Runnable{
         JSONObject obj = new JSONObject();
         obj.put("host", rmNode.getHost());
         obj.put("port", rmNode.getPort());
-        servletHelper.sendPostRequest(nodeInfo, path, obj.toString());
+        servletHelper.sendPostRequest(nodeInfo.getHost(),nodeInfo.getPort(), path, obj.toString());
         for(NodeInfo node : slaves){
-            servletHelper.sendPostRequest(node, path, obj.toString());
+            servletHelper.sendPostRequest(node.getHost(),node.getPort(), path, obj.toString());
         }
     }
 }

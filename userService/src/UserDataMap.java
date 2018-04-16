@@ -1,3 +1,6 @@
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -20,7 +23,7 @@ public class UserDataMap {
         if(!checkIfUserExist(userId)) {
             this.userData.put(userId, user);
         }
-        System.out.println("userAdded");
+        System.out.println("MESSAGE: Adding user");
     }
 
     /**
@@ -40,4 +43,20 @@ public class UserDataMap {
     public boolean checkIfUserExist(int userId){
         return this.userData.containsKey(userId);
     }
+
+    public JSONObject buildMapObject(){
+        JSONObject obj = new JSONObject();
+        JSONArray usersInfo = new JSONArray();
+        for(User user : userData.values()){
+            JSONObject userObj = new JSONObject();
+            userObj.put("userid",user.getUserid());
+            userObj.put("username", user.getUsername());
+            userObj.put("tickets", user.getTicketArray());
+            usersInfo.add(userObj);
+        }
+        obj.put("userdata", usersInfo);
+        System.out.println(obj.toString());
+        return obj;
+    }
 }
+

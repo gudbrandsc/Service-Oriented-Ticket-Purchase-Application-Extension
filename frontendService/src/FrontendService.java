@@ -38,9 +38,9 @@ public class FrontendService {
         ServletHandler handler = new ServletHandler();
         server.setHandler(handler);
         handler.addServletWithMapping(new ServletHolder(new GetEventsServlet(properties)), "/events");
-        handler.addServletWithMapping(new ServletHolder(new EventServlet(properties)), "/events/*");
+        handler.addServletWithMapping(new ServletHolder(new EventServlet(properties, masterInfo)), "/events/*");
         handler.addServletWithMapping(new ServletHolder(new UserServlet(properties, masterInfo)), "/users/*");
-        handler.addServletWithMapping(new ServletHolder(new MasterHandler(masterInfo)), "/master/*");
+        handler.addServletWithMapping(new ServletHolder(new MasterHandler(masterInfo)), "/election/*");
         handler.addServletWithMapping(HeartServlet.class, "/alive");
 
 
