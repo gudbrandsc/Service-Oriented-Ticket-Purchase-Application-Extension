@@ -1,5 +1,10 @@
 import org.json.simple.JSONObject;
 
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.List;
+
 public class NodeElector {
     private UserServiceNodeData userServiceNodeData;
     private FrontendNodeData frontendNodeData;
@@ -16,51 +21,65 @@ public class NodeElector {
         this.userDataMap = userDataMap;
     }
 
-    public synchronized void startElection(){
+    public void startElection(){
         String nodeId = nodeInfo.getHost() + nodeInfo.getPort();
-        String path = "/election/elect";
-        JSONObject obj = new JSONObject();
+        System.out.println("[S] Starting election...");
+
         boolean setAsMaster = true;
-        if(!nodeInfo.isMaster()) {
-            for (NodeInfo info : userServiceNodeData.getUserServicesListCopy()) {
-                String id = info.getHost() + info.getPort();
-                if (id.compareTo(nodeId) > 0) {
-                    if (servletHelper.sendPostRequest(info.getHost(),info.getPort(), path, obj.toJSONString()) == 200) {
-                        System.out.println("MESSAGE: Sent election request to secondary");
-                        setAsMaster = false;
-                    }
+        int higherNumberProcess = 0;
+        for (NodeInfo info : userServiceNodeData.getUserServicesListCopy()) {
+            String id = info.getHost() + info.getPort();
+            if (id.compareTo(nodeId) > 0) {
+                higherNumberProcess++;
+                if (sendGetElection(info.getHost(),info.getPort()) == 200) {
+                    setAsMaster = false;
                 }
             }
-            if (setAsMaster) {
-                setNewMaster();
-            }
         }
+        System.out.println("[S] Sent " + higherNumberProcess + " election requests to services with higher process id");
+
+        if (setAsMaster) {
+            setNewMaster();
+        }
+
     }
 
-    private synchronized void setNewMaster() {
-        System.out.println("MESSAGE: Im the new master");
-        String path = "/election/update";
+    private void setNewMaster() {
+        System.out.println("[S] Setting myself as the new master");
+        String path = "/election";
 
         nodeInfo.setAsMaster();
-        JSONObject obj = new JSONObject();
+        JSONObject obj = userDataMap.buildMapObject();
         obj.put("host", nodeInfo.getHost());
         obj.put("port", nodeInfo.getPort());
-        System.out.println("MESSAGE: Update master on all user services ");
-        JSONObject data = userDataMap.buildMapObject();
-        for (NodeInfo info : userServiceNodeData.getUserServicesListCopy()) {
+        List<NodeInfo> secondaries =  userServiceNodeData.getUserServicesListCopy();
+        for (NodeInfo info : secondaries) {
             int status = servletHelper.sendPostRequest(info.getHost(), info.getPort(), path, obj.toJSONString());
             if (status != 200) {
-                //Remove node and send request
+                //TODO: Remove node and send request
             }
         }
 
         for (NodeInfo info : frontendNodeData.getFrontendListCopy()) {
-            System.out.println("MESSAGE:Update master on all frontend services");
             int status = servletHelper.sendPostRequest(info.getHost(), info.getPort(), path, obj.toJSONString());
             if (status != 200) {
-                //Remove frontend
+                //TODO: Remove frontend
             }
+        }
+    }
 
+
+    private int sendGetElection(String host, int port){
+        String path = "election";
+        try {
+            String url = "http://" + host + ":" + port + "/" + path;
+            URL obj = new URL(url);
+            HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+            con.setRequestMethod("GET");
+            return con.getResponseCode();
+
+        } catch (IOException e) {
+            return 401;
         }
     }
 }

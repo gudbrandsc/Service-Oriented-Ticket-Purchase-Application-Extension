@@ -56,7 +56,6 @@ public class ServletHelper {
 
             String url = "http://" + host + ":" + port + path;
             URL obj = new URL(url);
-            System.out.println(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
             con.setDoOutput(true);
             con.setRequestMethod("POST");
@@ -89,4 +88,5 @@ public class ServletHelper {
         in.close();
         return response.toString();
     }
+
 }

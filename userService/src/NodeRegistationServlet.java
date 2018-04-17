@@ -22,12 +22,15 @@ public class NodeRegistationServlet extends HttpServlet {
     private FrontendNodeData frontendNodeData;
     private UserServiceNodeData userServiceNodeData;
     private ServletHelper servletHelper;
+    private UserDataMap userDataMap;
 
-    public NodeRegistationServlet(NodeInfo nodeInfo, FrontendNodeData frontendNodeData, UserServiceNodeData userServiceNodeData) {
+    public NodeRegistationServlet(NodeInfo nodeInfo, FrontendNodeData frontendNodeData, UserServiceNodeData userServiceNodeData, UserDataMap userDataMap) {
         this.nodeInfo = nodeInfo;
         this.frontendNodeData = frontendNodeData;
         this.userServiceNodeData = userServiceNodeData;
         this.servletHelper = new ServletHelper();
+        this.userDataMap = userDataMap;
+
     }
 
     @Override
@@ -79,7 +82,7 @@ public class NodeRegistationServlet extends HttpServlet {
         }
         obj.put("frontends", frontends);
         obj.put("userservices", userServices);
-//        System.out.println("resp : \n" + obj.toJSONString());
+        obj.put("users", userDataMap.buildMapObject());
         return obj.toJSONString();
         //TODO Add all users too
 
@@ -88,8 +91,11 @@ public class NodeRegistationServlet extends HttpServlet {
     private void addFrontend(HttpServletResponse resp, JSONObject requestBody, NodeInfo newNode) throws IOException {
         if(!frontendNodeData.checkIfNodeExist(newNode)) {
             if (this.nodeInfo.isMaster()) {
+                System.out.println("[P] Registering new frontend " + newNode.getHost() + ":" + newNode.getPort());
                 String path = "/register/frontend";
                 replicateData(resp, path, requestBody);
+            }else{
+                System.out.println("[S] Registering new frontend " + newNode.getHost() + ":" + newNode.getPort());
             }
             frontendNodeData.addNode(newNode);
         }
@@ -99,8 +105,11 @@ public class NodeRegistationServlet extends HttpServlet {
     private void addUserService(HttpServletResponse resp, JSONObject requestBody, NodeInfo newNode) throws IOException {
         if(!userServiceNodeData.checkIfNodeExist(newNode)){
             if (this.nodeInfo.isMaster()) { //TODO add return 200 if n nodes return 200
+                System.out.println("[P] Registering new user service " + newNode.getHost() + ":" + newNode.getPort());
                 String path = "/register/userservice";
                 replicateData(resp, path, requestBody);
+            }else{
+                System.out.println("[S] Registering new user service " + newNode.getHost() + ":" + newNode.getPort());
             }
             userServiceNodeData.addNode(newNode);
         }
@@ -109,18 +118,17 @@ public class NodeRegistationServlet extends HttpServlet {
 
     private void replicateData(HttpServletResponse resp, String path, JSONObject requestBody) throws IOException {
         PrintWriter pw = resp.getWriter();
-
+        String responseData = buildResponse();
         for(NodeInfo nodeInfo : userServiceNodeData.getUserServicesListCopy()){
-            servletHelper.sendPostRequest(nodeInfo.getHost(),nodeInfo.getPort(), path, requestBody.toString());
+          int respCode = servletHelper.sendPostRequest(nodeInfo.getHost(), nodeInfo.getPort(), path, requestBody.toString());
+          if(respCode != 200){
+              //TODO remove node
+          }
         }
 
-        pw.write(buildResponse());
+        pw.write(responseData);
         pw.flush();
         pw.close();
         //TODO remove node if it do not resp may be done with throws
     }
-
-
-
-
 }

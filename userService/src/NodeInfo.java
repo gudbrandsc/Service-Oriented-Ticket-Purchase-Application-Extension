@@ -34,7 +34,6 @@ public class NodeInfo {
     }
 
     public synchronized void updateMaster(String host, int port){
-        System.out.println("MESSAGE: Updating master to: " + host + ":" + port);
         this.masterHost = host;
         this.masterPort = port;
     }

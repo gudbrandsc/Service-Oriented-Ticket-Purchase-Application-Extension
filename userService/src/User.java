@@ -119,4 +119,9 @@ public class User {
         return this.ticketArray.size();
     }
 
+    public void updateTicketArray(JSONArray newArray){
+        this.ticketArray.clear();
+        this.ticketArray.addAll(newArray);
+    }
+
 }

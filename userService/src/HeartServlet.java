@@ -21,6 +21,7 @@ public class HeartServlet extends HttpServlet{
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
             resp.setStatus(HttpStatus.OK_200);
+            //Add version number
 
     }
 }

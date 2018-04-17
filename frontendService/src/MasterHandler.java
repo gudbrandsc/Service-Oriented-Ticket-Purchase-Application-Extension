@@ -19,19 +19,10 @@ public class MasterHandler extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String pathInfo = req.getPathInfo();
+        JSONObject requestBody = stringToJsonObject(requestToString(req));
+        masterInfo.setNewMaster(requestBody.get("host").toString(), Integer.valueOf(requestBody.get("port").toString()));
+        resp.setStatus(HttpStatus.OK_200);
 
-        if(pathInfo.equals("/update")){
-            JSONObject requestBody = stringToJsonObject(requestToString(req));
-            if(requestBody.containsKey("host") && requestBody.containsKey("port")){
-                masterInfo.setNewMaster(requestBody.get("host").toString(), Integer.valueOf(requestBody.get("port").toString()));
-                resp.setStatus(HttpStatus.OK_200);
-            }else {
-                resp.setStatus(HttpStatus.BAD_REQUEST_400);
-            }
-        }else {
-            resp.setStatus(HttpStatus.BAD_REQUEST_400);
-        }
     }
 
     /**

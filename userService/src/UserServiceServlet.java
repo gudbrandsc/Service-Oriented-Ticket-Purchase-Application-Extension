@@ -1,17 +1,15 @@
 import org.eclipse.jetty.http.HttpStatus;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Iterator;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -55,26 +53,11 @@ public class UserServiceServlet extends HttpServlet{
         String pathValue = req.getPathInfo().substring(1);
         Pattern pattern = Pattern.compile(isInt);
         if(pattern.matcher(pathValue).matches()) {
-            int userId = Integer.valueOf(pathValue);
-            if (userDataMap.checkIfUserExist(userId)) {
-                User user = userDataMap.getUser(userId);
-                String username = user.getUsername();
-                JSONObject json = new JSONObject();
-                JSONArray eventarray = new JSONArray();
-                json.put("userid", userId);
-                json.put("username", username);
-                if (user.getNumEventsSize() > 0) {
-                    Iterator<JSONObject> it = user.getEvents().iterator();
-                    while(it.hasNext()) {
-                        JSONObject obj = it.next();
-                        JSONObject item = new JSONObject();
-                        item.put("eventid", obj.get("eventid").toString());
-                        eventarray.add(item);
-                    }
-                }
-                json.put("tickets", eventarray);
+            int requestUserId = Integer.valueOf(pathValue);
+            if (userDataMap.checkIfUserExist(requestUserId)) {
+                JSONObject userObject = buildUserObject(requestUserId);
                 resp.setContentType("application/json; charset=UTF-8");
-                out.println(json);
+                out.println(userObject);
                 out.flush();
                 resp.setStatus(HttpStatus.OK_200);
             } else {
@@ -101,122 +84,142 @@ public class UserServiceServlet extends HttpServlet{
         String uri = req.getRequestURI();
         Pattern add = Pattern.compile(addTicketPattern);
         Pattern transfer = Pattern.compile(transferTicketPattern);
-
         Matcher matchAdd = add.matcher(uri);
         Matcher matchTransfer = transfer.matcher(uri);
         JSONObject requestBody = servletHelper.stringToJsonObject(servletHelper.requestToString(req));
 
         if (matchAdd.matches()) {
-            addTicketsHandler(resp, requestBody, Integer.valueOf(matchAdd.group(1)));
+            addTicketsRequest(resp, requestBody, Integer.valueOf(matchAdd.group(1)));
         }else if(matchTransfer.matches()){
-            transfereTicketsHandler(resp, requestBody, Integer.valueOf(matchTransfer.group(1)));
-        }else if(req.getRequestURI().equals("/create")) {
-            createUserHandler(resp, requestBody, printWriter);
+            transfereTicketsRequest(resp, requestBody, Integer.valueOf(matchTransfer.group(1)));
+        }else if(uri.equals("/create")) {
+            createUserRequest(resp, requestBody, printWriter);
         }else{
             resp.setStatus(HttpStatus.BAD_REQUEST_400);
         }
     }
 
-    private void createUserHandler(HttpServletResponse resp, JSONObject requestBody,  PrintWriter printWriter){
-        if(requestBody.containsKey("username")){
-            String username = requestBody.get("username").toString();
-            if(!(username.isEmpty())){
-                User user = new User(userid, username);
-                addUser(userid, user);
+    /**
+     * Method that gets all information about a user by its userid.
+     * @param requestUserId Id of the user to get information about
+     * @return a JSONObject with all information about the user
+     */
+    private JSONObject buildUserObject(int requestUserId){
+        User user = userDataMap.getUser(requestUserId);
+        String username = user.getUsername();
+        JSONObject json = new JSONObject();
+        JSONArray eventarray = new JSONArray();
+        json.put("userid", requestUserId);
+        json.put("username", username);
+        if (user.getNumEventsSize() > 0) {
+            Iterator<JSONObject> it = user.getEvents().iterator();
+            while(it.hasNext()) {
+                JSONObject obj = it.next();
+                JSONObject item = new JSONObject();
+                item.put("eventid", obj.get("eventid").toString());
+                eventarray.add(item);
+            }
+        }
+        json.put("tickets", eventarray);
+        return json;
+    }
+
+    private void createUserRequest(HttpServletResponse resp, JSONObject requestBody, PrintWriter printWriter){
+        String username = requestBody.get("username").toString();
+        if(!(username.isEmpty())){
+            User user = new User(userid, username);
+            addUser(userid, user);
+            if(nodeInfo.isMaster()) {
+                System.out.println("[P] Adding new user with userid: " + userid);
                 String path = "/create";
-                if(nodeInfo.isMaster()) {
-                    resp.setStatus(updatedAllSlaves(resp, path, requestBody.toJSONString()));
-                }else {
-                    resp.setStatus(HttpStatus.OK_200);
-                }
-                //TODO if 400 then remove slave
-                JSONObject respJSON = new JSONObject();
-                respJSON.put("userid", userid);
-                printWriter.println(respJSON.toString());
-                printWriter.flush();
-                userid++;
+                updatedAllSlaves(path, requestBody.toJSONString());
             }else{
-                resp.setStatus(HttpStatus.BAD_REQUEST_400);
-
+                System.out.println("[S] Adding new user with userid: " + userid);
             }
-        } else{
-            resp.setStatus(HttpStatus.BAD_REQUEST_400);
-        }
-    }
-
-    private void addTicketsHandler(HttpServletResponse resp,JSONObject requestBody, int userId){
-        if(requestBody.containsKey("eventid") && requestBody.containsKey("tickets")){
-            int eventid = Integer.parseInt(requestBody.get("eventid").toString());
-            int tickets = Integer.parseInt(requestBody.get("tickets").toString());
-            if(userDataMap.checkIfUserExist(userId)) {
-                JSONObject eventRequestBody = new JSONObject();
-                eventRequestBody.put("userid", userId);
-                eventRequestBody.put("eventid", eventid);
-                eventRequestBody.put("tickets", tickets);
-                String purchaseEventPath = "/purchase/" + eventid;
-                System.out.println("Port:" + eventService.getEventport());
-                int eventPort = Integer.valueOf(eventService.getEventport());
-                System.out.println(eventRequestBody.toString());
-                if(servletHelper.sendPostRequest(eventService.getEventhost(), eventPort, purchaseEventPath, eventRequestBody.toJSONString()) == 200){
-                    userDataMap.getUser(userId).addTickets(eventid, tickets);
-                    String path = "/" + userId + "/tickets/add" ;
-                    resp.setStatus(updatedAllSlaves(resp, path, requestBody.toJSONString()));
-                }else{
-                    resp.setStatus(HttpStatus.BAD_REQUEST_400);
-                }
-            }else{
-                resp.setStatus(HttpStatus.BAD_REQUEST_400);
-            }
+            resp.setStatus(HttpStatus.OK_200);
+            JSONObject respJSON = new JSONObject();
+            respJSON.put("userid", userid);
+            printWriter.println(respJSON.toString());
+            printWriter.flush();
+            userid++;
+            //TODO change to make random value that is not in the dataset yet
         }else{
             resp.setStatus(HttpStatus.BAD_REQUEST_400);
         }
     }
 
-    private void transfereTicketsHandler(HttpServletResponse resp,JSONObject requestBody, int userId){
-        if(requestBody.containsKey("eventid") && requestBody.containsKey("tickets") && requestBody.containsKey("targetuser")){
-            int eventid = Integer.parseInt(requestBody.get("eventid").toString());
-            int tickets = Integer.parseInt(requestBody.get("tickets").toString());
-            int targetuser = Integer.parseInt(requestBody.get("targetuser").toString());
-            if(userDataMap.checkIfUserExist(targetuser) && userDataMap.checkIfUserExist(userId)) {
-                System.out.println("found user");
-                if (transferTickets(eventid, userId, targetuser, tickets)) {
-                    System.out.println("Transfere tickets success");
-                    String path = " /" + userId + "/tickets/transfer";
-                    resp.setStatus(updatedAllSlaves(resp, path, requestBody.toJSONString()));
+    private void addTicketsRequest(HttpServletResponse resp, JSONObject requestBody, int requestUserId){
+        int eventid = Integer.parseInt(requestBody.get("eventid").toString());
+        int tickets = Integer.parseInt(requestBody.get("tickets").toString());
+        if(userDataMap.checkIfUserExist(requestUserId)) {
+            if(nodeInfo.isMaster()) {
+                resp.setStatus(addTicketsAsMaster(requestUserId, eventid, tickets, requestBody));
+            }else{
+                System.out.println("[S] Adding " + tickets + " to event with id " + eventid + " for user with user id " + requestUserId);
+                userDataMap.getUser(requestUserId).addTickets(eventid, tickets);
+                resp.setStatus(HttpStatus.OK_200);
+            }
+        }else{
+            resp.setStatus(HttpStatus.BAD_REQUEST_400);
+        }
+
+    }
+
+    private void transfereTicketsRequest(HttpServletResponse resp, JSONObject requestBody, int requestUserId){
+        int eventid = Integer.parseInt(requestBody.get("eventid").toString());
+        int tickets = Integer.parseInt(requestBody.get("tickets").toString());
+        int targetuser = Integer.parseInt(requestBody.get("targetuser").toString());
+        if(nodeInfo.isMaster()) {
+            if (userDataMap.checkIfUserExist(targetuser) && userDataMap.checkIfUserExist(requestUserId)) {
+                if (transferTickets(eventid, requestUserId, targetuser, tickets)) {
+                    System.out.println("[P] Transferring tickets " + tickets + " from user with id "+ requestUserId + " to user with id: " + targetuser);
+                    String path = "/" + requestUserId + "/tickets/transfer";
+                    updatedAllSlaves(path, requestBody.toJSONString());
+                    resp.setStatus(HttpStatus.OK_200);
                 } else {
                     resp.setStatus(HttpStatus.BAD_REQUEST_400);
-                    System.out.println("Fail transfere");
-
                 }
-            }else {
-                System.out.println("User nor exist");
+            } else {
                 resp.setStatus(HttpStatus.BAD_REQUEST_400);
             }
         }else {
-            System.out.println("requbody");
-
-            resp.setStatus(HttpStatus.BAD_REQUEST_400);
+            System.out.println("[S] Transferring tickets " + tickets + " from user with id "+ requestUserId + " to user with id: " + targetuser);
+            transferTickets(eventid, requestUserId, targetuser,tickets);
         }
+
     }
 
-
-
-    private int updatedAllSlaves(HttpServletResponse resp, String path, String body){
-        int countSuccess = 0;
-        for(NodeInfo slave : userServiceNodeData.getUserServicesListCopy()){
-           int status = servletHelper.sendPostRequest(slave.getHost(),slave.getPort(), path, body);
-           if(status == 200){
-               countSuccess++;
-           }else {
-               //Remove node
-           }
-        }
-        if (countSuccess == userServiceNodeData.getUserServicesListCopy().size()){
+    private int addTicketsAsMaster (int requestUserId, int eventid, int tickets, JSONObject requestBody){
+        JSONObject eventRequestBody = new JSONObject();
+        eventRequestBody.put("userid", requestUserId);
+        eventRequestBody.put("eventid", eventid);
+        eventRequestBody.put("tickets", tickets);
+        String purchaseEventPath = "/purchase/" + eventid;
+        if(servletHelper.sendPostRequest(eventService.getEventhost(), Integer.valueOf(eventService.getEventport()), purchaseEventPath, eventRequestBody.toJSONString()) == 200){
+            userDataMap.getUser(requestUserId).addTickets(eventid, tickets);
+            System.out.println("[P] Adding " + tickets + " to event with id " + eventid + " for user with user id " + requestUserId);
+            String path = "/" + requestUserId + "/tickets/add" ;
+            updatedAllSlaves(path, requestBody.toJSONString());
             return HttpStatus.OK_200;
+        }else {
+            return HttpStatus.BAD_REQUEST_400;
         }
-        return HttpStatus.BAD_REQUEST_400;
     }
 
+    private void updatedAllSlaves(String path, String body){
+        System.out.println("[P] Replicating write request to all secondaries");
+        List<NodeInfo> secondaryCopy = userServiceNodeData.getUserServicesListCopy();
+        for(NodeInfo secondary : secondaryCopy){
+            int status = servletHelper.sendPostRequest(secondary.getHost(), secondary.getPort(), path, body);
+            if(status != 200){
+                System.out.println("[P] Unable to replicate data to " + secondary.getHost() + ":" + secondary.getPort());
+                String removeNodePath = "/remove/userservice";
+                removeDeadNode(secondary, secondaryCopy, removeNodePath);
+            }
+        }
+    }
+
+    //TODO change slave to secondary
     /** Synchronized method that transfers tickets between to users.
      * @param eventId Id of the events to transfer from
      * @param userId Id of the user to transfer tickets from
@@ -235,5 +238,14 @@ public class UserServiceServlet extends HttpServlet{
     private synchronized void addUser(int userid, User user){
         userDataMap.addUser(userid, user);
 
+    }
+    private void removeDeadNode(NodeInfo rmNode, List<NodeInfo> secondaries, String path){
+        JSONObject obj = new JSONObject();
+        obj.put("host", rmNode.getHost());
+        obj.put("port", rmNode.getPort());
+        servletHelper.sendPostRequest(nodeInfo.getHost(),nodeInfo.getPort(), path, obj.toString());
+        for(NodeInfo node : secondaries){
+            servletHelper.sendPostRequest(node.getHost(),node.getPort(), path, obj.toString());
+        }
     }
 }

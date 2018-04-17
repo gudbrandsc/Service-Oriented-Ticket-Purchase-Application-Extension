@@ -23,7 +23,6 @@ public class UserDataMap {
         if(!checkIfUserExist(userId)) {
             this.userData.put(userId, user);
         }
-        System.out.println("MESSAGE: Adding user");
     }
 
     /**
@@ -55,8 +54,10 @@ public class UserDataMap {
             usersInfo.add(userObj);
         }
         obj.put("userdata", usersInfo);
-        System.out.println(obj.toString());
         return obj;
+    }
+    public void updateuserDataMap(ConcurrentHashMap<Integer, User> newMap){
+        this.userData = newMap;
     }
 }
 

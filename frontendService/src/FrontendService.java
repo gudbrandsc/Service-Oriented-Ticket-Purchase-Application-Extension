@@ -40,7 +40,7 @@ public class FrontendService {
         handler.addServletWithMapping(new ServletHolder(new GetEventsServlet(properties)), "/events");
         handler.addServletWithMapping(new ServletHolder(new EventServlet(properties, masterInfo)), "/events/*");
         handler.addServletWithMapping(new ServletHolder(new UserServlet(properties, masterInfo)), "/users/*");
-        handler.addServletWithMapping(new ServletHolder(new MasterHandler(masterInfo)), "/election/*");
+        handler.addServletWithMapping(new ServletHolder(new MasterHandler(masterInfo)), "/election");
         handler.addServletWithMapping(HeartServlet.class, "/alive");
 
 
@@ -78,7 +78,6 @@ public class FrontendService {
             body.put("port", port);
 
             String url = "http://" + masterHost + ":" + masterPort + path;
-            System.out.println(url);
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
             con.setDoOutput(true);
@@ -87,7 +86,6 @@ public class FrontendService {
             OutputStreamWriter wr =  new OutputStreamWriter(con.getOutputStream());
             wr.write(body.toString());
             wr.flush();
-            System.out.println(con.getResponseCode());
             con.getResponseCode();
         } catch (IOException e) {
             // e.printStackTrace();

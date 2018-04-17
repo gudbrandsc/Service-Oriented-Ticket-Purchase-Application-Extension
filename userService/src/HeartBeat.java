@@ -28,27 +28,28 @@ public class HeartBeat implements Runnable{
 
         while (run) {
             if (nodeInfo.isMaster()) {
-                List<NodeInfo> slaves = userServiceNodeData.getUserServicesListCopy();
-                for(NodeInfo info : slaves){
+                List<NodeInfo> secondaries = userServiceNodeData.getUserServicesListCopy();
+                List<NodeInfo> frontends = frontendNodeData.getFrontendListCopy();
+                for(NodeInfo info : secondaries){
                     if(checkIfalive(info.getHost(), info.getPort()) != 200){
+                        System.out.println("[P] Secondary did not respond to heartbeat " + info.getHost() + ":" + info.getPort());
                         String path = "/remove/userservice";
-                        removeDeadNode(info, slaves, path);
+                        removeDeadNode(info, secondaries, path);
                     }
                 }
-                List<NodeInfo> frontends = frontendNodeData.getFrontendListCopy();
                 for(NodeInfo info : frontends){
                     if(checkIfalive(info.getHost(), info.getPort()) != 200){
+                        System.out.println("[P] Frontend did not respond to heartbeat " + info.getHost() + ":" + info.getPort());
                         String path = "/remove/frontend";
-                        removeDeadNode(info, slaves, path);
+                        removeDeadNode(info, secondaries, path);
                     }
                 }
 
             } else {
                 if(checkIfalive(nodeInfo.getMasterHost(), nodeInfo.getMasterPort()) != 200){
-                    System.out.println("MESSAGE: Dead master -> starting election");
+                    System.out.println("[S] Master did not respond to heartbeat");
                     nodeElector.startElection();
                     //Also update data to mach data in master
-
                 }
             }
 
@@ -59,6 +60,7 @@ public class HeartBeat implements Runnable{
             }
         }
     }
+
     private int checkIfalive(String host, int port){
         String path = "alive";
         try {
@@ -74,6 +76,7 @@ public class HeartBeat implements Runnable{
     }
 
     private void removeDeadNode(NodeInfo rmNode, List<NodeInfo> slaves, String path){
+        System.out.println("[P] Removing dead node from all services");
         JSONObject obj = new JSONObject();
         obj.put("host", rmNode.getHost());
         obj.put("port", rmNode.getPort());

@@ -88,7 +88,6 @@ public class UserServlet extends HttpServlet{
         Matcher matchTransfer = transfer.matcher(pathInfo);
 
         if(pathInfo.equals("/create")){
-            System.out.println("Send post to : "+masterInfo.getUserHost()+":"+masterInfo.getUserPort());
             sendPostRequestAndPrint(masterInfo.getUserHost(), masterInfo.getUserPort(), pathInfo, resp, req);
         }else if(matchTransfer.matches()){
             String path =  "/" + matchTransfer.group(1) + "/tickets/transfer";
@@ -163,7 +162,6 @@ public class UserServlet extends HttpServlet{
      */
     private JSONObject sendGetRequest(String masterHost, int masterPort, String path, HttpServletResponse resp) throws IOException {
         String url = "http://" + masterHost + ":" + masterPort + "/" + path;
-        System.out.println(url);
         URL obj = new URL(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
         con.setRequestMethod("GET");
@@ -188,7 +186,6 @@ public class UserServlet extends HttpServlet{
      */
     private void sendPostRequest(String masterHost, int masterPort, String path, HttpServletResponse resp, HttpServletRequest req) throws IOException {
         String url = "http://" + masterHost + ":" + masterPort + path;
-        System.out.println(url);
         URL obj = new URL(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
         con.setDoOutput(true);

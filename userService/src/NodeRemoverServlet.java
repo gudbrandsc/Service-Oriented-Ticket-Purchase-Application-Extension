@@ -27,21 +27,22 @@ public class NodeRemoverServlet extends HttpServlet {
     @Override
     public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String pathInfo = req.getPathInfo();
-        System.out.println(pathInfo);
         JSONObject requestBody = servletHelper.stringToJsonObject(servletHelper.requestToString(req));
         NodeInfo removeNode = new NodeInfo(Integer.valueOf(requestBody.get("port").toString()), requestBody.get("host").toString());
         if(pathInfo.equals("/userservice")) {
+            System.out.println("[S] Removing dead user service " + requestBody.get("host").toString() + ":" + Integer.valueOf(requestBody.get("port").toString()));
             removeUserServiceNode(removeNode);
             resp.setStatus(HttpStatus.OK_200);
         }else if(pathInfo.equals("/frontend")){
             removeFrontendNode(removeNode);
+            System.out.println("[S] Removing dead frontend " + requestBody.get("host").toString() + ":" + Integer.valueOf(requestBody.get("port").toString()));
             resp.setStatus(HttpStatus.OK_200);
 
         }
     }
 
     private void removeUserServiceNode(NodeInfo node){
-        userServiceNodeData.RemoveNode(node);
+        userServiceNodeData.RemoveNode(node.getHost(), node.getPort());
     }
 
     private void removeFrontendNode(NodeInfo node){

@@ -73,7 +73,6 @@ public class EventServlet extends HttpServlet{
         Matcher m = p.matcher(pathInfo);
 
         if(pathInfo.equals("/create")){
-            System.out.println(pathInfo);
             sendPostRequestAndPrint(properties.getEventhost(), properties.getEventport(), pathInfo, resp, req);
         }else if(m.matches()){
             int  eventid = Integer.parseInt(m.group(1));
@@ -83,8 +82,7 @@ public class EventServlet extends HttpServlet{
             JSONObject reqObj = stringToJsonObject(requestToString(req));
             object.put("tickets", reqObj.get("tickets"));
             object.put("eventid", eventid);
-            System.out.println(masterInfo.getUserPort());
-            System.out.println(object.toJSONString());
+
             sendPostRequest(masterInfo.getUserHost(),masterInfo.getUserPort(),path,resp,object.toJSONString());
         }else{
             resp.setStatus(HttpStatus.BAD_REQUEST_400);
@@ -156,7 +154,6 @@ public class EventServlet extends HttpServlet{
      */
     private JSONObject sendGetRequest(String host, String port, String path, HttpServletResponse resp) throws IOException {
         String url = "http://" + host + ":" + port + "/" + path;
-        System.out.println(url);
         URL obj = new URL(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
         con.setRequestMethod("GET");
@@ -177,38 +174,12 @@ public class EventServlet extends HttpServlet{
      * @param port target port
      * @param path api path
      * @param resp Http response
-     * @param req Http request
-     * @throws IOException
-     */
-    private void sendPostRequest(String host, int port, String path, HttpServletResponse resp, HttpServletRequest req) throws IOException {
-        String url = "http://" + host + ":" + port + "/" + path;
-        URL obj = new URL(url);
-        HttpURLConnection con = (HttpURLConnection) obj.openConnection();
-        con.setDoOutput(true);
-        con.setRequestMethod("POST");
-        con.setRequestProperty("Content-type", "application/json");
-        OutputStreamWriter wr =  new OutputStreamWriter(con.getOutputStream());
-        wr.write(requestToString(req));
-        wr.flush();
-
-        resp.setStatus(con.getResponseCode());
-    }
-
-    /**
-     * Method used to send post requests.
-     * Build url for target path
-     * Sets application type, and opens connection.
-     * @param host target host
-     * @param port target port
-     * @param path api path
-     * @param resp Http response
      * @param json json string
      * @throws IOException
      */
     private void sendPostRequest(String host, int port, String path, HttpServletResponse resp, String json) throws IOException {
         String url = "http://" + host + ":" + port + path;
         URL obj = new URL(url);
-        System.out.println(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
         con.setDoOutput(true);
         con.setRequestMethod("POST");
@@ -233,7 +204,6 @@ public class EventServlet extends HttpServlet{
     private void sendPostRequestAndPrint(String host, String port, String path, HttpServletResponse resp, HttpServletRequest req) throws IOException {
         String url = "http://" + host + ":" + port + path;
         URL obj = new URL(url);
-        System.out.println(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
         con.setDoOutput(true);
         con.setRequestMethod("POST");

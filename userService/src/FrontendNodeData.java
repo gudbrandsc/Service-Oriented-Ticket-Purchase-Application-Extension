@@ -12,9 +12,7 @@ public class FrontendNodeData {
     }
 
    public synchronized void addNode(NodeInfo nodeInfo){
-       System.out.println("MESSAGE: Adding frontend " + nodeInfo.getHost() + ":" + nodeInfo.getPort());
             this.frontendList.add(nodeInfo);
-
    }
 
     public synchronized boolean checkIfNodeExist(NodeInfo nodeInfo){
@@ -26,8 +24,6 @@ public class FrontendNodeData {
         return false;
     }
 
-
-
     public synchronized List<NodeInfo> getFrontendListCopy() {
         List<NodeInfo> copy = new ArrayList<>();
         for (NodeInfo copynode : this.frontendList){
@@ -37,7 +33,6 @@ public class FrontendNodeData {
     }
 
     public synchronized void RemoveNode(NodeInfo nodeInfo){
-        System.out.println("MESSAGE: Removing frontend " + nodeInfo.getHost() + ":" + nodeInfo.getPort());
         List<NodeInfo> updatedList = Collections.synchronizedList(new ArrayList<NodeInfo>());
         for(NodeInfo info : this.frontendList){
             if(info.getPort() != nodeInfo.getPort() && info.getHost() != nodeInfo.getHost()){
