@@ -10,20 +10,23 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ElectionServlet extends HttpServlet {
-    private NodeInfo nodeInfo;
-    private NodeElector nodeElector;
-    private ServletHelper servletHelper;
-    private UserServiceNodeData userServiceNodeData;
-    private UserDataMap userDataMap;
+    private  NodeInfo nodeInfo;
+    private  NodeElector nodeElector;
+    private  ServletHelper servletHelper;
+    private  UserServiceNodeData userServiceNodeData;
+    private  UserDataMap userDataMap;
+    private  AtomicInteger version;
 
-    public ElectionServlet(NodeInfo nodeInfo, NodeElector nodeElector, UserServiceNodeData userServiceNodeData, UserDataMap userDataMap ) {
+    public ElectionServlet(NodeInfo nodeInfo, NodeElector nodeElector, UserServiceNodeData userServiceNodeData, UserDataMap userDataMap, AtomicInteger version) {
         this.nodeInfo = nodeInfo;
         this.nodeElector = nodeElector;
         this.servletHelper = new ServletHelper();
         this.userServiceNodeData = userServiceNodeData;
         this.userDataMap = userDataMap;
+        this.version = version;
     }
 
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -42,10 +45,11 @@ public class ElectionServlet extends HttpServlet {
         nodeInfo.updateMaster(host, port);
         System.out.println("[S] Removing master from list of secondaries");
         userServiceNodeData.RemoveNode(host, port);
+        System.out.println("[S] Updating to version: " + version.intValue());
+        int versionNumber = Integer.parseInt(requestBody.get("version").toString());
+        version.set(versionNumber);
         updateUserData(newUserData);
         resp.setStatus(HttpStatus.OK_200);
-
-
     }
 
     private void updateUserData(JSONArray userdata){
@@ -60,7 +64,7 @@ public class ElectionServlet extends HttpServlet {
             JSONArray ticketList = (JSONArray) obj.get("tickets");
             newUser.updateTicketArray(ticketList);
         }
-        System.out.println("[S] Updated userdata map");
+        System.out.println("[S] Updated userdata map to master version");
         userDataMap.updateuserDataMap(updatedUserData);
     }
 }

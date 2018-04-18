@@ -1,3 +1,5 @@
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class NodeInfo {
     private int port;
     private String host;

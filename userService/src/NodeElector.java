@@ -4,21 +4,23 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class NodeElector {
-    private UserServiceNodeData userServiceNodeData;
-    private FrontendNodeData frontendNodeData;
-    private ServletHelper servletHelper;
-    private NodeInfo nodeInfo;
-    private UserDataMap userDataMap;
+    private  UserServiceNodeData userServiceNodeData;
+    private  FrontendNodeData frontendNodeData;
+    private  ServletHelper servletHelper;
+    private  NodeInfo nodeInfo;
+    private  UserDataMap userDataMap;
+    private  AtomicInteger version;
 
-
-    public NodeElector(UserServiceNodeData userServiceNodeData, NodeInfo nodeInfo, FrontendNodeData frontendNodeData, UserDataMap userDataMap) {
+    public NodeElector(UserServiceNodeData userServiceNodeData, NodeInfo nodeInfo, FrontendNodeData frontendNodeData, UserDataMap userDataMap, AtomicInteger version) {
         this.userServiceNodeData = userServiceNodeData;
         this.servletHelper = new ServletHelper();
         this.nodeInfo = nodeInfo;
         this.frontendNodeData = frontendNodeData;
         this.userDataMap = userDataMap;
+        this.version = version;
     }
 
     public void startElection(){
@@ -52,6 +54,7 @@ public class NodeElector {
         JSONObject obj = userDataMap.buildMapObject();
         obj.put("host", nodeInfo.getHost());
         obj.put("port", nodeInfo.getPort());
+        obj.put("version", version.intValue());
         List<NodeInfo> secondaries =  userServiceNodeData.getUserServicesListCopy();
         for (NodeInfo info : secondaries) {
             int status = servletHelper.sendPostRequest(info.getHost(), info.getPort(), path, obj.toJSONString());

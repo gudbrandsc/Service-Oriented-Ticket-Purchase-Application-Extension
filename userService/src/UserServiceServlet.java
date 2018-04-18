@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,16 +25,19 @@ public class UserServiceServlet extends HttpServlet{
     private UserServiceNodeData userServiceNodeData;
     private NodeInfo nodeInfo;
     private PropertiesLoader eventService;
+    private AtomicInteger version;
+
 
     //TODO refactor post
     /** Constructor */
-    public UserServiceServlet(UserDataMap userDataMap, int userid, UserServiceNodeData userServiceNodeData, NodeInfo nodeInfo, PropertiesLoader eventService) {
+    public UserServiceServlet(UserDataMap userDataMap, int userid, UserServiceNodeData userServiceNodeData, NodeInfo nodeInfo, PropertiesLoader eventService, AtomicInteger version) {
         this.userDataMap = userDataMap;
         this.userid = userid;
         this.servletHelper = new ServletHelper();
         this.userServiceNodeData = userServiceNodeData;
         this.nodeInfo = nodeInfo;
         this.eventService = eventService;
+        this.version = version;
 
     }
 
@@ -87,15 +91,18 @@ public class UserServiceServlet extends HttpServlet{
         Matcher matchAdd = add.matcher(uri);
         Matcher matchTransfer = transfer.matcher(uri);
         JSONObject requestBody = servletHelper.stringToJsonObject(servletHelper.requestToString(req));
-
-        if (matchAdd.matches()) {
-            addTicketsRequest(resp, requestBody, Integer.valueOf(matchAdd.group(1)));
-        }else if(matchTransfer.matches()){
-            transfereTicketsRequest(resp, requestBody, Integer.valueOf(matchTransfer.group(1)));
-        }else if(uri.equals("/create")) {
-            createUserRequest(resp, requestBody, printWriter);
-        }else{
-            resp.setStatus(HttpStatus.BAD_REQUEST_400);
+        try {
+            if (matchAdd.matches()) {
+                addTicketsRequest(resp, requestBody, Integer.valueOf(matchAdd.group(1)));
+            }else if(matchTransfer.matches()){
+                transfereTicketsRequest(resp, requestBody, Integer.valueOf(matchTransfer.group(1)));
+            }else if(uri.equals("/create")) {
+                createUserRequest(resp, requestBody, printWriter);
+            }else{
+                resp.setStatus(HttpStatus.BAD_REQUEST_400);
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 
@@ -124,16 +131,29 @@ public class UserServiceServlet extends HttpServlet{
         return json;
     }
 
-    private void createUserRequest(HttpServletResponse resp, JSONObject requestBody, PrintWriter printWriter){
+    private void createUserRequest(HttpServletResponse resp, JSONObject requestBody, PrintWriter printWriter) throws InterruptedException {
         String username = requestBody.get("username").toString();
         if(!(username.isEmpty())){
             User user = new User(userid, username);
-            addUser(userid, user);
             if(nodeInfo.isMaster()) {
+                addUser(userid, user);
+                requestBody.put("version", version.getAndIncrement());
                 System.out.println("[P] Adding new user with userid: " + userid);
                 String path = "/create";
                 updatedAllSlaves(path, requestBody.toJSONString());
             }else{
+                int expectedVersion = version.getAndIncrement();
+                System.out.println("Got Version : " + Integer.valueOf(requestBody.get("version").toString()) );
+                while(Integer.valueOf(requestBody.get("version").toString()) != expectedVersion){
+                    synchronized (version) {
+                        version.wait();
+                    }
+                }
+                addUser(userid, user);
+                System.out.println("Expecting version: " + version.intValue());
+                synchronized (version) {
+                    version.notify();
+                }
                 System.out.println("[S] Adding new user with userid: " + userid);
             }
             resp.setStatus(HttpStatus.OK_200);

@@ -11,6 +11,7 @@ import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @Author Gudbrand Schistad
@@ -18,9 +19,20 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class UserService {
     private static volatile int userid = 1;
+    private static NodeInfo nodeInfo;
+    private static PropertiesLoader properties;
+    private static FrontendNodeData frontendNodeData;
+    private static UserServiceNodeData userServiceNodeData;
+    private static UserDataMap userDataMap;
+    private static NodeElector nodeElector;
 
     public static void main(String[] args) {
-        NodeInfo nodeInfo = null;
+        AtomicInteger version = new AtomicInteger(0);
+        nodeInfo = null;
+        properties = new PropertiesLoader();
+        frontendNodeData = new FrontendNodeData();
+        userServiceNodeData = new UserServiceNodeData();
+        userDataMap = new UserDataMap();
 
         if(args.length >= 2 && args[0].equals("-port")){
             try {
@@ -28,7 +40,7 @@ public class UserService {
 
                 if(args[2].equals("-setAsMaster")) {
                     nodeInfo.setAsMaster();
-
+                    version.set(9);
                 }else if (args.length >= 6 && args[2].equals("-masterHost") && args[4].equals("-masterPort")){
                     nodeInfo.updateMaster(args[3], Integer.parseInt(args[5]));
                 }
@@ -40,31 +52,27 @@ public class UserService {
             System.exit(-1);
         }
 
-        PropertiesLoader properties = new PropertiesLoader();
-        FrontendNodeData frontendNodeData = new FrontendNodeData();
-        UserServiceNodeData userServiceNodeData = new UserServiceNodeData();
-        UserDataMap userDataMap = new UserDataMap();
-        NodeElector nodeElector = new NodeElector(userServiceNodeData, nodeInfo, frontendNodeData, userDataMap);
-
 
         Server server = new Server(nodeInfo.getPort());
         ServletHandler handler = new ServletHandler();
         server.setHandler(handler);
-        handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userid, userServiceNodeData, nodeInfo,properties)), "/*");
-        handler.addServletWithMapping(new ServletHolder(new NodeRegistationServlet(nodeInfo, frontendNodeData, userServiceNodeData, userDataMap)), "/register/*");
+        handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userid, userServiceNodeData, nodeInfo,properties, version)), "/*");
+        handler.addServletWithMapping(new ServletHolder(new NodeRegistationServlet(nodeInfo, frontendNodeData, userServiceNodeData, userDataMap, version)), "/register/*");
         handler.addServletWithMapping(HeartServlet.class, "/alive");
         handler.addServletWithMapping(new ServletHolder(new NodeRemoverServlet(userServiceNodeData, frontendNodeData)), "/remove/*");
-        handler.addServletWithMapping(new ServletHolder(new ElectionServlet(nodeInfo,nodeElector, userServiceNodeData, userDataMap)), "/election/*");
+        handler.addServletWithMapping(new ServletHolder(new ElectionServlet(nodeInfo,nodeElector, userServiceNodeData, userDataMap, version)), "/election/*");
 
 
         if(!nodeInfo.isMaster()){
             String path = "/register/userservice";
-            boolean success = registerUserServiceRequest(nodeInfo, path, frontendNodeData, userServiceNodeData, userDataMap);
+            boolean success = registerUserServiceRequest(nodeInfo, path, frontendNodeData, userServiceNodeData, userDataMap, version);
             if(!success){
                 System.out.println("Unable to register node with master");
                 System.exit(-1);
             }
         }
+        nodeElector = new NodeElector(userServiceNodeData, nodeInfo, frontendNodeData, userDataMap, version);
+
         System.out.println("Starting server on port " + nodeInfo.getPort() + "...");
         System.out.println("Server is master: " + nodeInfo.isMaster() + "...");
         new Thread(new HeartBeat(nodeInfo, userServiceNodeData, frontendNodeData, nodeElector)).start();
@@ -88,11 +96,11 @@ public class UserService {
      * @param path api path
      * @throws IOException
      */
-    private static boolean registerUserServiceRequest(NodeInfo nodeInfo, String path, FrontendNodeData frontendNodeData, UserServiceNodeData userServiceNodeData, UserDataMap userDataMap) {
+    private static boolean registerUserServiceRequest(NodeInfo nodeInfo, String path, FrontendNodeData frontendNodeData, UserServiceNodeData userServiceNodeData, UserDataMap userDataMap, AtomicInteger version) {
         System.out.println("[S] Registering userService with master");
         JSONObject body = new JSONObject();
         ServletHelper helper = new ServletHelper();
-
+        //TODO Get atomic integer
         try {
             body.put("host", nodeInfo.getHost());
             body.put("port", nodeInfo.getPort());
@@ -113,6 +121,7 @@ public class UserService {
                 addFrontendNodes(responseData, frontendNodeData);
                 addUserServiceNodes(responseData, userServiceNodeData);
                 setUserData(responseData, userDataMap);
+                setVersionValue(responseData, version);
             }
         } catch (IOException e) {
             // e.printStackTrace();
@@ -163,5 +172,11 @@ public class UserService {
             JSONArray ticketList = (JSONArray) obj.get("tickets");
             newUser.updateTicketArray(ticketList);
         }
+    }
+    private static void setVersionValue(JSONObject responseData, AtomicInteger version){
+        int value =Integer.valueOf(responseData.get("version").toString());
+        version.set(value);
+        System.out.println("[S] Setting version number as " + version.intValue());
+
     }
 }

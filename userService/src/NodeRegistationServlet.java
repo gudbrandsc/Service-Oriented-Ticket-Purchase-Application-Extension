@@ -15,6 +15,7 @@ import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 public class NodeRegistationServlet extends HttpServlet {
@@ -23,14 +24,15 @@ public class NodeRegistationServlet extends HttpServlet {
     private UserServiceNodeData userServiceNodeData;
     private ServletHelper servletHelper;
     private UserDataMap userDataMap;
+    private final AtomicInteger version;
 
-    public NodeRegistationServlet(NodeInfo nodeInfo, FrontendNodeData frontendNodeData, UserServiceNodeData userServiceNodeData, UserDataMap userDataMap) {
+    public NodeRegistationServlet(NodeInfo nodeInfo, FrontendNodeData frontendNodeData, UserServiceNodeData userServiceNodeData, UserDataMap userDataMap, AtomicInteger version) {
         this.nodeInfo = nodeInfo;
         this.frontendNodeData = frontendNodeData;
         this.userServiceNodeData = userServiceNodeData;
         this.servletHelper = new ServletHelper();
         this.userDataMap = userDataMap;
-
+        this.version = version;
     }
 
     @Override
@@ -83,9 +85,9 @@ public class NodeRegistationServlet extends HttpServlet {
         obj.put("frontends", frontends);
         obj.put("userservices", userServices);
         obj.put("users", userDataMap.buildMapObject());
-        return obj.toJSONString();
-        //TODO Add all users too
+        obj.put("version", version.intValue());
 
+        return obj.toJSONString();
     }
 
     private void addFrontend(HttpServletResponse resp, JSONObject requestBody, NodeInfo newNode) throws IOException {
@@ -125,7 +127,6 @@ public class NodeRegistationServlet extends HttpServlet {
               //TODO remove node
           }
         }
-
         pw.write(responseData);
         pw.flush();
         pw.close();
