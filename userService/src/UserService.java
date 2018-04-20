@@ -1,3 +1,5 @@
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
@@ -5,12 +7,8 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
 import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.InetAddress;
-import java.net.URL;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.util.Iterator;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -18,21 +16,29 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Class that starts the user service server, and maps all requests to the correct servlet.
  */
 public class UserService {
-    private static volatile int userid = 1;
     private static NodeInfo nodeInfo;
     private static PropertiesLoader properties;
-    private static FrontendNodeData frontendNodeData;
-    private static UserServiceNodeData userServiceNodeData;
+    private static FrontendMemberData frontendMemberData;
+    private static SecondariesMemberData secondariesMemberData;
     private static UserDataMap userDataMap;
     private static NodeElector nodeElector;
+    private static AtomicInteger version = new AtomicInteger(1);
+    private static AtomicInteger userid = new AtomicInteger(1);
+    private static Logger log = LogManager.getLogger();
 
+    /**
+     * Main method that starts a user service, and register the service with the master if its a secondary.
+     * Also sets up all servlets and starts server
+     */
     public static void main(String[] args) {
-        AtomicInteger version = new AtomicInteger(0);
+
         nodeInfo = null;
         properties = new PropertiesLoader();
-        frontendNodeData = new FrontendNodeData();
-        userServiceNodeData = new UserServiceNodeData();
+        frontendMemberData = new FrontendMemberData();
+        secondariesMemberData = new SecondariesMemberData();
         userDataMap = new UserDataMap();
+        log.debug(properties.getEventhost()+ " HOST");
+        log.debug(properties.getEventport() + " PORT");
 
         if(args.length >= 2 && args[0].equals("-port")){
             try {
@@ -40,7 +46,7 @@ public class UserService {
 
                 if(args[2].equals("-setAsMaster")) {
                     nodeInfo.setAsMaster();
-                    version.set(9);
+                    version.set(1);
                 }else if (args.length >= 6 && args[2].equals("-masterHost") && args[4].equals("-masterPort")){
                     nodeInfo.updateMaster(args[3], Integer.parseInt(args[5]));
                 }
@@ -48,7 +54,7 @@ public class UserService {
                 e.printStackTrace();
             }
         }else{
-            System.out.println("Invalid arguments. \nFormat: -port **** -masterURL *****");
+            log.fatal("Invalid arguments. \nFormat: -port **** -masterURL *****");
             System.exit(-1);
         }
 
@@ -56,81 +62,86 @@ public class UserService {
         Server server = new Server(nodeInfo.getPort());
         ServletHandler handler = new ServletHandler();
         server.setHandler(handler);
-        handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userid, userServiceNodeData, nodeInfo,properties, version)), "/*");
-        handler.addServletWithMapping(new ServletHolder(new NodeRegistationServlet(nodeInfo, frontendNodeData, userServiceNodeData, userDataMap, version)), "/register/*");
+        handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userid, secondariesMemberData, nodeInfo,properties, version)), "/*");
+        handler.addServletWithMapping(new ServletHolder(new NodeRegistationServlet(nodeInfo, frontendMemberData, secondariesMemberData, userDataMap, version, userid)), "/register/*");
         handler.addServletWithMapping(HeartServlet.class, "/alive");
-        handler.addServletWithMapping(new ServletHolder(new NodeRemoverServlet(userServiceNodeData, frontendNodeData)), "/remove/*");
-        handler.addServletWithMapping(new ServletHolder(new ElectionServlet(nodeInfo,nodeElector, userServiceNodeData, userDataMap, version)), "/election/*");
+        handler.addServletWithMapping(new ServletHolder(new NodeRemoverServlet(secondariesMemberData, frontendMemberData)), "/remove/*");
+        handler.addServletWithMapping(new ServletHolder(new ElectionServlet(nodeInfo, secondariesMemberData, userDataMap, version, userid)), "/election/*");
 
 
         if(!nodeInfo.isMaster()){
-            String path = "/register/userservice";
-            boolean success = registerUserServiceRequest(nodeInfo, path, frontendNodeData, userServiceNodeData, userDataMap, version);
+            boolean success = registerUserServiceRequest();
             if(!success){
-                System.out.println("Unable to register node with master");
+                log.info("Unable to register node with master");
                 System.exit(-1);
             }
         }
-        nodeElector = new NodeElector(userServiceNodeData, nodeInfo, frontendNodeData, userDataMap, version);
-
-        System.out.println("Starting server on port " + nodeInfo.getPort() + "...");
-        System.out.println("Server is master: " + nodeInfo.isMaster() + "...");
-        new Thread(new HeartBeat(nodeInfo, userServiceNodeData, frontendNodeData, nodeElector)).start();
+        nodeElector = new NodeElector(secondariesMemberData, nodeInfo, frontendMemberData, userDataMap, version, userid);
+        log.info("Starting server on port " + nodeInfo.getPort() + "...");
+        log.info("Server is master: " + nodeInfo.isMaster() + "...");
+        new Thread(new HeartBeat(nodeInfo, secondariesMemberData, frontendMemberData, nodeElector)).start();
 
 
         try {
             server.start();
             server.join();
-            System.out.println("Exiting...");
+            log.fatal("Exiting...");
         }
         catch (Exception ex) {
-            System.out.println("Interrupted while running server.");
+            log.fatal("Interrupted while running server.");
             System.exit(-1);
         }
     }
 
     /**
-     * Method used to send post requests.
-     * Build url for target path
-     * Sets application type, and opens connection.
-     * @param path api path
-     * @throws IOException
+     * Method used to register a secondary with the master
+     * @return true if registration was a success
      */
-    private static boolean registerUserServiceRequest(NodeInfo nodeInfo, String path, FrontendNodeData frontendNodeData, UserServiceNodeData userServiceNodeData, UserDataMap userDataMap, AtomicInteger version) {
-        System.out.println("[S] Registering userService with master");
-        JSONObject body = new JSONObject();
-        ServletHelper helper = new ServletHelper();
-        //TODO Get atomic integer
-        try {
-            body.put("host", nodeInfo.getHost());
-            body.put("port", nodeInfo.getPort());
+    private static boolean registerUserServiceRequest() {
+        log.info("[S] Registering userService with master");
+        ServiceHelper helper = new ServiceHelper();
 
-            String url = "http://" + nodeInfo.getMasterHost() + ":" + nodeInfo.getMasterPort() + path;
-            URL obj = new URL(url);
-            HttpURLConnection con = (HttpURLConnection) obj.openConnection();
-            con.setDoOutput(true);
-            con.setRequestMethod("POST");
-            con.setRequestProperty("Content-type", "application/json");
-            OutputStreamWriter wr =  new OutputStreamWriter(con.getOutputStream());
-            wr.write(body.toString());
-            wr.flush();
-            wr.close();
+        try {
+            HttpURLConnection con = sendRegistrationRequest();
             if (con.getResponseCode() == 200){
-                //Add response
                 JSONObject responseData = helper.stringToJsonObject(helper.readInputStream(con));
-                addFrontendNodes(responseData, frontendNodeData);
-                addUserServiceNodes(responseData, userServiceNodeData);
-                setUserData(responseData, userDataMap);
-                setVersionValue(responseData, version);
+                addFrontendNodes(responseData);
+                addUserServiceNodes(responseData);
+                setUserData(responseData);
+                setVersionValue(responseData);
+                setUserIdValue(responseData);
             }
         } catch (IOException e) {
-            // e.printStackTrace();
             return false;
         }
         return true;
     }
 
-    private static void addFrontendNodes(JSONObject responseData, FrontendNodeData frontendNodeData){
+    /**
+     * Method that sends a registration request to the master service
+     * @return reponsetype
+     * */
+    private static HttpURLConnection sendRegistrationRequest() throws IOException {
+        JSONObject body = new JSONObject();
+        body.put("host", nodeInfo.getHost());
+        body.put("port", nodeInfo.getPort());
+
+        String url = "http://" + nodeInfo.getMasterHost() + ":" + nodeInfo.getMasterPort() + "/register/userservice";
+        URL obj = new URL(url);
+        HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+        con.setDoOutput(true);
+        con.setRequestMethod("POST");
+        con.setRequestProperty("Content-type", "application/json");
+        OutputStreamWriter wr = new OutputStreamWriter(con.getOutputStream());
+        wr.write(body.toString());
+        wr.flush();
+        wr.close();
+        return con;
+
+    }
+
+    /** Adds all frontend nodes to frontend membership list */
+    private static void addFrontendNodes(JSONObject responseData){
         JSONArray frontendServices = (JSONArray) responseData.get("frontends");
 
         Iterator i = frontendServices.iterator();
@@ -138,13 +149,14 @@ public class UserService {
             JSONObject node = (JSONObject) i.next();
             String host = node.get("host").toString();
             int port = Integer.valueOf(node.get("port").toString());
-            System.out.println("[S] Adding new frontend " + host + ":" + port);
+            log.info("[S] Adding new frontend " + host + ":" + port);
             NodeInfo info = new NodeInfo(port,host);
-            frontendNodeData.addNode(info);
+            frontendMemberData.addNode(info);
         }
     }
 
-    private static void addUserServiceNodes(JSONObject responseData, UserServiceNodeData userServiceNodeData){
+    /** Adds all secondaries nodes to secondaries membership list */
+    private static void addUserServiceNodes(JSONObject responseData){
         JSONArray userservices = (JSONArray) responseData.get("userservices");
 
         Iterator i = userservices.iterator();
@@ -152,14 +164,17 @@ public class UserService {
             JSONObject node = (JSONObject) i.next();
             String host = node.get("host").toString();
             int port = Integer.valueOf(node.get("port").toString());
-            System.out.println("[S] Adding new user service secondary " + host + ":" + port);
+            log.info("[S] Adding new user service secondary " + host + ":" + port);
             NodeInfo info = new NodeInfo(port,host);
-            userServiceNodeData.addNode(info);
+            secondariesMemberData.addNode(info);
         }
     }
 
-    private static void setUserData(JSONObject responseData, UserDataMap userDataMap){
-        System.out.println("[S] Setting userdata ");
+    /** Sets user data to the same as the master
+     * @param responseData userdata from master registration response
+     */
+    private static void setUserData(JSONObject responseData){
+        log.info("[S] Setting userdata ");
         JSONObject users = (JSONObject) responseData.get("users");
         JSONArray userdata = (JSONArray) users.get("userdata");
         Iterator<JSONObject> it = userdata.iterator();
@@ -173,10 +188,23 @@ public class UserService {
             newUser.updateTicketArray(ticketList);
         }
     }
-    private static void setVersionValue(JSONObject responseData, AtomicInteger version){
+
+    /**
+     * Sets the version number to the same as the master
+     * @param responseData response data from master
+     */
+    private static void setVersionValue(JSONObject responseData){
         int value =Integer.valueOf(responseData.get("version").toString());
         version.set(value);
-        System.out.println("[S] Setting version number as " + version.intValue());
-
+        log.info("[S] Setting version number as " + version.intValue());
+    }
+    /**
+     * Sets the user id number to the same as the master
+     * @param responseData response data from master
+     */
+    private static void setUserIdValue(JSONObject responseData){
+        int value =Integer.valueOf(responseData.get("userID").toString());
+        userid.set(value);
+        log.info("[S] Setting user ID  as " + userid.intValue());
     }
 }

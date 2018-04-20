@@ -1,16 +1,17 @@
 import org.eclipse.jetty.http.HttpStatus;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.util.Iterator;
 
+
+/**
+ * @author Gudbrand Schistad
+ * Servlet used to respond to heartbeat requests
+ */
 public class HeartServlet extends HttpServlet{
+
     /**
      * Do get method that handles all incoming get requests.
      * @param req incoming request
@@ -21,7 +22,5 @@ public class HeartServlet extends HttpServlet{
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
             resp.setStatus(HttpStatus.OK_200);
-            //Add version number
-
     }
 }

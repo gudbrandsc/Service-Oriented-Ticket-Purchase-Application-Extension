@@ -1,3 +1,5 @@
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
@@ -15,6 +17,7 @@ import java.net.*;
  * Class that starts the frontend service server, and maps all requests to the correct servlet.
  */
 public class FrontendService {
+    private  static Logger log = LogManager.getLogger();
 
     public static void main(String[] args) {
         int port = 0;
@@ -26,7 +29,7 @@ public class FrontendService {
             masterHost = args[3];
             masterPort = Integer.parseInt(args[5]);
         }else{
-            System.out.println("Invalid arguments. \nFormat: -port **** -masterURL *****");
+            log.info("Invalid arguments. \nFormat: -port **** -masterURL *****");
             System.exit(-1);
         }
 
@@ -45,18 +48,18 @@ public class FrontendService {
 
 
         if(!registerFrontendRequest(masterHost, masterPort,"/register/frontend", port)) {
-            System.out.println("Registration failed..");
+            log.info("Registration failed..");
             System.exit(-1);
 
         }
 
-        System.out.println("Starting server on port " + port + "...");
+        log.info("Starting server on port " + port + "...");
 
         try {
             server.start();
             server.join();
         } catch (Exception ex) {
-            System.out.println("Interrupted while running server.");
+            log.info("Interrupted while running server.");
             System.exit(-1);
         }
 
@@ -71,7 +74,7 @@ public class FrontendService {
      * @throws IOException
      */
     private static boolean registerFrontendRequest(String masterHost, int masterPort, String path, int port) {
-        System.out.println("Registering frontend with master...");
+        log.info("Registering frontend with master...");
         JSONObject body = new JSONObject();
         try {
             body.put("host", InetAddress.getLocalHost().getHostAddress());

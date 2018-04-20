@@ -1,6 +1,5 @@
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -43,6 +42,7 @@ public class UserDataMap {
         return this.userData.containsKey(userId);
     }
 
+    /** @return  a json object containing all user data */
     public JSONObject buildMapObject(){
         JSONObject obj = new JSONObject();
         JSONArray usersInfo = new JSONArray();
@@ -56,6 +56,8 @@ public class UserDataMap {
         obj.put("userdata", usersInfo);
         return obj;
     }
+
+    /** updates userdata map to the one received from the master */
     public void updateuserDataMap(ConcurrentHashMap<Integer, User> newMap){
         this.userData = newMap;
     }

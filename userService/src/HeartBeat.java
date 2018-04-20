@@ -1,3 +1,5 @@
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.simple.JSONObject;
 
 import java.io.IOException;
@@ -6,51 +8,47 @@ import java.net.URL;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * @author gudbrand schistad
+ * Class that is used by all user services to check if other services are alive.
+ * If a the thread is a master service it will check all secondaries and frontend.
+ * if the thread is a secondary it will check that the master is alive.
+ */
 public class HeartBeat implements Runnable{
-    private UserServiceNodeData userServiceNodeData;
-    private FrontendNodeData frontendNodeData;
+    private SecondariesMemberData secondariesMemberData;
+    private FrontendMemberData frontendMemberData;
     private NodeInfo nodeInfo;
-    private ServletHelper servletHelper;
+    private ServiceHelper serviceHelper;
     private NodeElector nodeElector;
+    private  static Logger log = LogManager.getLogger();
 
-    public HeartBeat(NodeInfo nodeInfo, UserServiceNodeData userServiceNodeData, FrontendNodeData frontendNodeData, NodeElector nodeElector) {
-        this.userServiceNodeData = userServiceNodeData;
-        this.servletHelper = new ServletHelper();
+    /** Constructor */
+    public HeartBeat(NodeInfo nodeInfo, SecondariesMemberData secondariesMemberData, FrontendMemberData frontendMemberData, NodeElector nodeElector) {
+        this.secondariesMemberData = secondariesMemberData;
+        this.serviceHelper = new ServiceHelper();
         this.nodeInfo = nodeInfo;
-        this.frontendNodeData = frontendNodeData;
+        this.frontendMemberData = frontendMemberData;
         this.nodeElector = nodeElector;
     }
 
-
+    /**
+     * Method that sends GET requests to check if a node is alive.
+     * If user service is a master then it will check all secondaries and frontend's.
+     * If user service is a secondary it will check if the master is alive.
+     * Sends heartbeats every 5 seconds
+     */
     @Override
     public void run() {
         boolean run = true;
 
         while (run) {
             if (nodeInfo.isMaster()) {
-                List<NodeInfo> secondaries = userServiceNodeData.getUserServicesListCopy();
-                List<NodeInfo> frontends = frontendNodeData.getFrontendListCopy();
-                for(NodeInfo info : secondaries){
-                    if(checkIfalive(info.getHost(), info.getPort()) != 200){
-                        System.out.println("[P] Secondary did not respond to heartbeat " + info.getHost() + ":" + info.getPort());
-                        String path = "/remove/userservice";
-                        removeDeadNode(info, secondaries, path);
-                    }
-                }
-                for(NodeInfo info : frontends){
-                    if(checkIfalive(info.getHost(), info.getPort()) != 200){
-                        System.out.println("[P] Frontend did not respond to heartbeat " + info.getHost() + ":" + info.getPort());
-                        String path = "/remove/frontend";
-                        removeDeadNode(info, secondaries, path);
-                    }
-                }
-
+                List<NodeInfo> secondaries = secondariesMemberData.getUserServicesListCopy();
+                List<NodeInfo> frontends = frontendMemberData.getFrontendListCopy();
+                sendHearBeatToSecondaries(secondaries);
+                sendHearBeatTofrontends(secondaries, frontends);
             } else {
-                if(checkIfalive(nodeInfo.getMasterHost(), nodeInfo.getMasterPort()) != 200){
-                    System.out.println("[S] Master did not respond to heartbeat");
-                    nodeElector.startElection();
-                    //Also update data to mach data in master
-                }
+                sendHearBeatToMaster();
             }
 
             try {
@@ -61,28 +59,86 @@ public class HeartBeat implements Runnable{
         }
     }
 
+    /**
+     * Method used by the master to send a heartbeat request to all secondaries
+     * If a secondary do not respond with a Http status 200.
+     * then remove the secondary from all membership lists
+     * @param secondaries list copy of all registered secondaries
+     */
+    private void sendHearBeatToSecondaries(List<NodeInfo> secondaries){
+        for(NodeInfo info : secondaries){
+            if(checkIfalive(info.getHost(), info.getPort()) != 200){
+                log.info("[P] Secondary did not respond to heartbeat " + info.getHost() + ":" + info.getPort());
+                String path = "/remove/userservice";
+                removeDeadNode(info, secondaries, path);
+            }
+        }
+    }
+
+    /**
+     * Method used by the master to send a heartbeat request to all frontend services
+     * If a frontend services do not respond with a Http status 200,
+     * then remove the secondary from all membership lists
+     * @param secondaries list copy of all registered secondaries
+     */
+    private void sendHearBeatTofrontends(List<NodeInfo> secondaries, List<NodeInfo> frontends ){
+        for(NodeInfo info : frontends){
+            if(checkIfalive(info.getHost(), info.getPort()) != 200){
+                log.info("[P] Frontend did not respond to heartbeat");
+                String path = "/remove/frontend";
+                removeDeadNode(info, secondaries, path);
+            }
+        }
+    }
+
+    /**
+     * Method used by the secondaries to send a heartbeat request to the master
+     * If a master do not respond,
+     * it will start an election
+     */
+    private void sendHearBeatToMaster(){
+        if(checkIfalive(nodeInfo.getMasterHost(), nodeInfo.getMasterPort()) != 200){
+            log.info("[S] Master did not respond to heartbeat...");
+            nodeElector.startElection();
+        }
+    }
+
+    /**
+     * Sends get methods to check if a service is alive and returns response code,
+     * or 401 if there is no response
+     * @param host host of the service
+     * @param port port of the service
+     * @return 200 if it got resp and 401 on timeout
+     */
     private int checkIfalive(String host, int port){
         String path = "alive";
+        int respCode;
         try {
             String url = "http://" + host + ":" + port + "/" + path;
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
             con.setRequestMethod("GET");
-            return con.getResponseCode();
+            respCode = con.getResponseCode();
 
         } catch (IOException e) {
             return 401;
         }
+        return respCode;
     }
 
-    private void removeDeadNode(NodeInfo rmNode, List<NodeInfo> slaves, String path){
-        System.out.println("[P] Removing dead node from all services");
+    /**
+     * Removes a dead node from all secondaries.
+     * @param rmNode node info for the node to remove
+     * @param secondaries list of all registered secondaries
+     * @param path path to specify if node is a frontend or user service. */
+    private void removeDeadNode(NodeInfo rmNode, List<NodeInfo> secondaries, String path){
+        log.info("[P] Removing dead node from all services");
         JSONObject obj = new JSONObject();
         obj.put("host", rmNode.getHost());
         obj.put("port", rmNode.getPort());
-        servletHelper.sendPostRequest(nodeInfo.getHost(),nodeInfo.getPort(), path, obj.toString());
-        for(NodeInfo node : slaves){
-            servletHelper.sendPostRequest(node.getHost(),node.getPort(), path, obj.toString());
+        serviceHelper.sendPostRequest(nodeInfo.getHost(),nodeInfo.getPort(), path, obj.toString());
+        for(NodeInfo node : secondaries){
+            serviceHelper.sendPostRequest(node.getHost(), node.getPort(), path, obj.toString());
         }
     }
 }

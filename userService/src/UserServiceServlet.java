@@ -1,7 +1,8 @@
 import org.eclipse.jetty.http.HttpStatus;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -9,7 +10,6 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Iterator;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -18,27 +18,26 @@ import java.util.regex.Pattern;
  * @Author Gudbrand Schistad
  * Servlet class that handles all get and post requests.
  */
-public class UserServiceServlet extends HttpServlet{
+public class UserServiceServlet extends HttpServlet {
     private UserDataMap userDataMap;
-    private static volatile int userid;
-    private ServletHelper servletHelper;
-    private UserServiceNodeData userServiceNodeData;
+    private AtomicInteger userid;
+    private ServiceHelper serviceHelper;
+    private SecondariesMemberData secondariesMemberData;
     private NodeInfo nodeInfo;
     private PropertiesLoader eventService;
     private AtomicInteger version;
+    private  static Logger log = LogManager.getLogger();
 
 
-    //TODO refactor post
     /** Constructor */
-    public UserServiceServlet(UserDataMap userDataMap, int userid, UserServiceNodeData userServiceNodeData, NodeInfo nodeInfo, PropertiesLoader eventService, AtomicInteger version) {
+    public UserServiceServlet(UserDataMap userDataMap, AtomicInteger userid, SecondariesMemberData secondariesMemberData, NodeInfo nodeInfo, PropertiesLoader eventService, AtomicInteger version) {
         this.userDataMap = userDataMap;
         this.userid = userid;
-        this.servletHelper = new ServletHelper();
-        this.userServiceNodeData = userServiceNodeData;
+        this.serviceHelper = new ServiceHelper();
+        this.secondariesMemberData = secondariesMemberData;
         this.nodeInfo = nodeInfo;
         this.eventService = eventService;
         this.version = version;
-
     }
 
     /**
@@ -49,9 +48,7 @@ public class UserServiceServlet extends HttpServlet{
      * @throws ServletException
      */
     @Override
-    public void doGet(HttpServletRequest req, HttpServletResponse resp)
-            throws IOException {
-
+    public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         PrintWriter out = resp.getWriter();
         String isInt = "[0-9]+";
         String pathValue = req.getPathInfo().substring(1);
@@ -90,7 +87,7 @@ public class UserServiceServlet extends HttpServlet{
         Pattern transfer = Pattern.compile(transferTicketPattern);
         Matcher matchAdd = add.matcher(uri);
         Matcher matchTransfer = transfer.matcher(uri);
-        JSONObject requestBody = servletHelper.stringToJsonObject(servletHelper.requestToString(req));
+        JSONObject requestBody = serviceHelper.stringToJsonObject(serviceHelper.requestToString(req));
         try {
             if (matchAdd.matches()) {
                 addTicketsRequest(resp, requestBody, Integer.valueOf(matchAdd.group(1)));
@@ -99,7 +96,7 @@ public class UserServiceServlet extends HttpServlet{
             }else if(uri.equals("/create")) {
                 createUserRequest(resp, requestBody, printWriter);
             }else{
-                resp.setStatus(HttpStatus.BAD_REQUEST_400);
+                resp.setStatus(HttpStatus.NOT_FOUND_404);
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -107,7 +104,7 @@ public class UserServiceServlet extends HttpServlet{
     }
 
     /**
-     * Method that gets all information about a user by its userid.
+     * Method that gets all information about a user by it's user ID.
      * @param requestUserId Id of the user to get information about
      * @return a JSONObject with all information about the user
      */
@@ -131,115 +128,209 @@ public class UserServiceServlet extends HttpServlet{
         return json;
     }
 
+    /**
+     * Method used to distinguish create requests for master node and secondary nodes.
+     * @param resp request response
+     * @param requestBody The JSON object from the POST request
+     * @param printWriter response printWriter
+     */
     private void createUserRequest(HttpServletResponse resp, JSONObject requestBody, PrintWriter printWriter) throws InterruptedException {
-        String username = requestBody.get("username").toString();
-        if(!(username.isEmpty())){
-            User user = new User(userid, username);
-            if(nodeInfo.isMaster()) {
-                addUser(userid, user);
-                requestBody.put("version", version.getAndIncrement());
-                System.out.println("[P] Adding new user with userid: " + userid);
-                String path = "/create";
-                updatedAllSlaves(path, requestBody.toJSONString());
-            }else{
-                int expectedVersion = version.getAndIncrement();
-                System.out.println("Got Version : " + Integer.valueOf(requestBody.get("version").toString()) );
-                while(Integer.valueOf(requestBody.get("version").toString()) != expectedVersion){
-                    synchronized (version) {
-                        version.wait();
-                    }
-                }
-                addUser(userid, user);
-                System.out.println("Expecting version: " + version.intValue());
-                synchronized (version) {
-                    version.notify();
-                }
-                System.out.println("[S] Adding new user with userid: " + userid);
-            }
-            resp.setStatus(HttpStatus.OK_200);
+        if(nodeInfo.isMaster()) {
             JSONObject respJSON = new JSONObject();
-            respJSON.put("userid", userid);
+            resp.setStatus(createUserAsMaster(requestBody, respJSON));
             printWriter.println(respJSON.toString());
             printWriter.flush();
-            userid++;
-            //TODO change to make random value that is not in the dataset yet
         }else{
-            resp.setStatus(HttpStatus.BAD_REQUEST_400);
+            resp.setStatus(createUserAsSecondary(requestBody));
         }
     }
 
-    private void addTicketsRequest(HttpServletResponse resp, JSONObject requestBody, int requestUserId){
+    /**
+     * Creates a user as a master. Assigns a version number to the request, end replicates it to all secondaries.
+     * Returns response status once replication is done
+     * @param requestBody body of the request
+     * @param respJSON Json used to return assigned userid to the frontend.
+     * @return Http status code
+     */
+    private int createUserAsMaster(JSONObject requestBody, JSONObject respJSON){
+        int setUserId = userid.getAndIncrement();
+        User user = new User(setUserId, requestBody.get("username").toString());
+
+        userDataMap.addUser(setUserId, user);
+        requestBody.put("version", version.getAndIncrement());
+
+        log.info("[P] Adding new user with user id: " + setUserId);
+        String path = "/create";
+        respJSON.put("userid", setUserId);
+
+        return serviceHelper.replicateToSecondaries(path, requestBody.toJSONString(), secondariesMemberData);
+    }
+
+    /**
+     * Creates a user as a secondary.
+     * If the version number from the request does not match the expected version then wait.
+     * If the version number from the request matches the expected version, then process request.
+     * Then update all waiting threads.
+     * Returns response status once replication is done
+     * @param requestBody body of the request
+     * @return Http status code
+     */
+    private int createUserAsSecondary(JSONObject requestBody) throws InterruptedException {
+        synchronized (version) {
+            log.info("[S] Received request version " + requestBody.get("version").toString() + " expected version " + version.intValue());
+
+            while(Integer.valueOf(requestBody.get("version").toString()) != version.intValue()){
+                log.info("[S] Request --> Waiting...");
+                version.wait();
+            }
+
+            int setUserId = userid.getAndIncrement();
+            version.getAndIncrement();
+            User user = new User(setUserId, requestBody.get("username").toString());
+            userDataMap.addUser(setUserId, user);
+            version.notifyAll();
+            log.info("[S] Adding new user with user id: " + setUserId);
+            return HttpStatus.OK_200;
+        }
+    }
+
+    /**
+     * Method used to distinguish create requests for master node and secondary nodes.
+     * Also checks that the requested user ID exist in the data structure.
+     * @param resp request response
+     * @param requestBody The JSON object from the POST request
+     */
+    private void addTicketsRequest(HttpServletResponse resp, JSONObject requestBody, int requestUserId) throws InterruptedException {
         int eventid = Integer.parseInt(requestBody.get("eventid").toString());
         int tickets = Integer.parseInt(requestBody.get("tickets").toString());
         if(userDataMap.checkIfUserExist(requestUserId)) {
             if(nodeInfo.isMaster()) {
                 resp.setStatus(addTicketsAsMaster(requestUserId, eventid, tickets, requestBody));
-            }else{
-                System.out.println("[S] Adding " + tickets + " to event with id " + eventid + " for user with user id " + requestUserId);
-                userDataMap.getUser(requestUserId).addTickets(eventid, tickets);
-                resp.setStatus(HttpStatus.OK_200);
+            }else {
+                addTicketsAsSecondary(requestUserId, eventid, tickets, requestBody);
             }
         }else{
             resp.setStatus(HttpStatus.BAD_REQUEST_400);
         }
-
     }
 
-    private void transfereTicketsRequest(HttpServletResponse resp, JSONObject requestBody, int requestUserId){
-        int eventid = Integer.parseInt(requestBody.get("eventid").toString());
-        int tickets = Integer.parseInt(requestBody.get("tickets").toString());
-        int targetuser = Integer.parseInt(requestBody.get("targetuser").toString());
-        if(nodeInfo.isMaster()) {
-            if (userDataMap.checkIfUserExist(targetuser) && userDataMap.checkIfUserExist(requestUserId)) {
-                if (transferTickets(eventid, requestUserId, targetuser, tickets)) {
-                    System.out.println("[P] Transferring tickets " + tickets + " from user with id "+ requestUserId + " to user with id: " + targetuser);
-                    String path = "/" + requestUserId + "/tickets/transfer";
-                    updatedAllSlaves(path, requestBody.toJSONString());
-                    resp.setStatus(HttpStatus.OK_200);
-                } else {
-                    resp.setStatus(HttpStatus.BAD_REQUEST_400);
-                }
-            } else {
-                resp.setStatus(HttpStatus.BAD_REQUEST_400);
-            }
-        }else {
-            System.out.println("[S] Transferring tickets " + tickets + " from user with id "+ requestUserId + " to user with id: " + targetuser);
-            transferTickets(eventid, requestUserId, targetuser,tickets);
-        }
-
-    }
-
+    /**
+     * Method that adds tickets a a master node.
+     * Send's a POST request to the event service to purchase tickets.
+     * If response 200 then add tickets to data structure and replicate data in all secondaries.
+     * else return 400
+     * @param requestUserId ID of the user that want to purchase tickets.
+     * @param eventid ID of the event
+     * @param tickets Number of tickets to purchase
+     * @param requestBody JSON of the incoming request */
     private int addTicketsAsMaster (int requestUserId, int eventid, int tickets, JSONObject requestBody){
+        //Build Json for post request to event service
         JSONObject eventRequestBody = new JSONObject();
         eventRequestBody.put("userid", requestUserId);
         eventRequestBody.put("eventid", eventid);
         eventRequestBody.put("tickets", tickets);
         String purchaseEventPath = "/purchase/" + eventid;
-        if(servletHelper.sendPostRequest(eventService.getEventhost(), Integer.valueOf(eventService.getEventport()), purchaseEventPath, eventRequestBody.toJSONString()) == 200){
+        //If the event service returns 200, then add tickets to data structure and replicate.
+        if(serviceHelper.sendPostRequest(eventService.getEventhost(), Integer.valueOf(eventService.getEventport()), purchaseEventPath, eventRequestBody.toJSONString()) == 200){
             userDataMap.getUser(requestUserId).addTickets(eventid, tickets);
-            System.out.println("[P] Adding " + tickets + " to event with id " + eventid + " for user with user id " + requestUserId);
+            log.info("[P] Adding " + tickets + " tickets for eventID " + eventid + " to user with userID " + requestUserId);
             String path = "/" + requestUserId + "/tickets/add" ;
-            updatedAllSlaves(path, requestBody.toJSONString());
-            return HttpStatus.OK_200;
+            requestBody.put("version", version.getAndIncrement());
+            return serviceHelper.replicateToSecondaries(path, requestBody.toJSONString(), secondariesMemberData);
         }else {
             return HttpStatus.BAD_REQUEST_400;
         }
     }
 
-    private void updatedAllSlaves(String path, String body){
-        System.out.println("[P] Replicating write request to all secondaries");
-        List<NodeInfo> secondaryCopy = userServiceNodeData.getUserServicesListCopy();
-        for(NodeInfo secondary : secondaryCopy){
-            int status = servletHelper.sendPostRequest(secondary.getHost(), secondary.getPort(), path, body);
-            if(status != 200){
-                System.out.println("[P] Unable to replicate data to " + secondary.getHost() + ":" + secondary.getPort());
-                String removeNodePath = "/remove/userservice";
-                removeDeadNode(secondary, secondaryCopy, removeNodePath);
+    /**
+     * Method that adds tickets as a secondary.
+     * If request version number is not equal expected version -> wait
+     * else add tickets to user increment version and notify
+     * @param requestUserId ID of the user that want to purchase tickets.
+     * @param eventid ID of the event
+     * @param tickets Number of tickets to purchase
+     * @param requestBody JSON of the incoming request */
+    private int addTicketsAsSecondary (int requestUserId, int eventid, int tickets, JSONObject requestBody) throws InterruptedException {
+        log.info("[S] Received request version " + requestBody.get("version").toString() + " expected version " + version.intValue());
+        synchronized (version) {
+
+            while (Integer.valueOf(requestBody.get("version").toString()) != version.intValue()) {
+                version.wait();
             }
+
+            log.info("[S] Adding " + tickets + " tickets for eventID " + eventid + " to user with userID " + requestUserId);
+            userDataMap.getUser(requestUserId).addTickets(eventid, tickets);
+            version.getAndIncrement();
+            version.notifyAll();
+            return HttpStatus.OK_200;
         }
     }
 
-    //TODO change slave to secondary
+    /**
+     * Method used to distinguish transfer ticket requests for master node and secondary nodes.
+     * @param resp request response
+     * @param requestBody The JSON object from the POST request
+     */
+    private void transfereTicketsRequest(HttpServletResponse resp, JSONObject requestBody, int requestUserId) throws InterruptedException {
+        int eventid = Integer.parseInt(requestBody.get("eventid").toString());
+        int tickets = Integer.parseInt(requestBody.get("tickets").toString());
+        int targetuser = Integer.parseInt(requestBody.get("targetuser").toString());
+        if(nodeInfo.isMaster()) {
+            resp.setStatus(transfereAsMaster(requestBody, requestUserId, targetuser, eventid, tickets));
+        }else {
+           resp.setStatus(transfereAsSecondary(requestBody, requestUserId, targetuser, eventid, tickets));
+        }
+    }
+
+    /**
+     * Transfers tickets between two users, if the transfer is a success, then the master will replicate the write operation to
+     * all secondaries.
+     * @param requestBody json from the post request
+     * @param requestUserId id of the user to transfer tickets from
+     * @param targetuser Id of the user to transfer tickets to
+     * @param eventid id of the event
+     * @param tickets number of tickets to transfer
+     */
+    private int transfereAsMaster (JSONObject requestBody, int requestUserId, int targetuser, int eventid, int tickets) {
+        if (userDataMap.checkIfUserExist(targetuser) && userDataMap.checkIfUserExist(requestUserId)) {
+            if (transferTickets(eventid, requestUserId, targetuser, tickets)) {
+                log.info("[P] Transferring  " + tickets + " tickets from userID " + requestUserId + " to userID: " + targetuser);
+                String path = "/" + requestUserId + "/tickets/transfer";
+                requestBody.put("version", version.getAndIncrement());
+                return serviceHelper.replicateToSecondaries(path, requestBody.toJSONString(), secondariesMemberData);
+            } else {
+                return HttpStatus.BAD_REQUEST_400;
+            }
+        } else {
+            return HttpStatus.BAD_REQUEST_400;
+        }
+    }
+
+    /**
+     * Transfers tickets between two users, waits until the request version matches the expected version.
+     * @param requestBody json from the post request
+     * @param requestUserId id of the user to transfer tickets from
+     * @param targetuser Id of the user to transfer tickets to
+     * @param eventid id of the event
+     * @param tickets number of tickets to transfer
+     */
+    private int transfereAsSecondary (JSONObject requestBody, int requestUserId, int targetuser, int eventid, int tickets) throws InterruptedException {
+        log.info("[S] Received request version " + requestBody.get("version").toString() + " expected version " + version.intValue());
+        synchronized (version) {
+            while (Integer.valueOf(requestBody.get("version").toString()) != version.intValue()) {
+                version.wait();
+            }
+
+            log.info("[S] Transferring  " + tickets + " tickets from userId " + requestUserId + " to userId: " + targetuser);
+            transferTickets(eventid, requestUserId, targetuser, tickets);
+            version.getAndIncrement();
+            version.notifyAll();
+            return 200;
+        }
+    }
+
+
+
     /** Synchronized method that transfers tickets between to users.
      * @param eventId Id of the events to transfer from
      * @param userId Id of the user to transfer tickets from
@@ -255,17 +346,4 @@ public class UserServiceServlet extends HttpServlet{
         return false;
     }
 
-    private synchronized void addUser(int userid, User user){
-        userDataMap.addUser(userid, user);
-
-    }
-    private void removeDeadNode(NodeInfo rmNode, List<NodeInfo> secondaries, String path){
-        JSONObject obj = new JSONObject();
-        obj.put("host", rmNode.getHost());
-        obj.put("port", rmNode.getPort());
-        servletHelper.sendPostRequest(nodeInfo.getHost(),nodeInfo.getPort(), path, obj.toString());
-        for(NodeInfo node : secondaries){
-            servletHelper.sendPostRequest(node.getHost(),node.getPort(), path, obj.toString());
-        }
-    }
 }

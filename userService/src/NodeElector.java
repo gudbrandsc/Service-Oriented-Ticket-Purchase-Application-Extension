@@ -1,88 +1,86 @@
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.simple.JSONObject;
-
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * @author Gudbrand Schistad
+ * Class used to start an election and set a secondary as new master
+ */
 public class NodeElector {
-    private  UserServiceNodeData userServiceNodeData;
-    private  FrontendNodeData frontendNodeData;
-    private  ServletHelper servletHelper;
+    private SecondariesMemberData secondariesMemberData;
+    private FrontendMemberData frontendMemberData;
+    private ServiceHelper serviceHelper;
     private  NodeInfo nodeInfo;
     private  UserDataMap userDataMap;
     private  AtomicInteger version;
+    private AtomicInteger userid;
+    private  static Logger log = LogManager.getLogger();
 
-    public NodeElector(UserServiceNodeData userServiceNodeData, NodeInfo nodeInfo, FrontendNodeData frontendNodeData, UserDataMap userDataMap, AtomicInteger version) {
-        this.userServiceNodeData = userServiceNodeData;
-        this.servletHelper = new ServletHelper();
+    /** Constructor */
+    public NodeElector(SecondariesMemberData secondariesMemberData, NodeInfo nodeInfo, FrontendMemberData frontendMemberData,
+                       UserDataMap userDataMap, AtomicInteger version, AtomicInteger userid) {
+        this.secondariesMemberData = secondariesMemberData;
+        this.serviceHelper = new ServiceHelper();
         this.nodeInfo = nodeInfo;
-        this.frontendNodeData = frontendNodeData;
+        this.frontendMemberData = frontendMemberData;
         this.userDataMap = userDataMap;
         this.version = version;
+        this.userid = userid;
     }
 
+    /**
+     * Method that sends election requests to all higher valued process secondaries, and waits for any 200 response
+     * If no response is received it will set itself as the master
+     */
     public void startElection(){
+        log.info("[S] Starting election...");
         String nodeId = nodeInfo.getHost() + nodeInfo.getPort();
-        System.out.println("[S] Starting election...");
-
+        String path = "election";
         boolean setAsMaster = true;
         int higherNumberProcess = 0;
-        for (NodeInfo info : userServiceNodeData.getUserServicesListCopy()) {
+
+        for (NodeInfo info : secondariesMemberData.getUserServicesListCopy()) {
             String id = info.getHost() + info.getPort();
             if (id.compareTo(nodeId) > 0) {
                 higherNumberProcess++;
-                if (sendGetElection(info.getHost(),info.getPort()) == 200) {
+                if (serviceHelper.sendGetAndReturnStatus(info.getHost(), info.getPort(), path) == 200) {
                     setAsMaster = false;
                 }
             }
         }
-        System.out.println("[S] Sent " + higherNumberProcess + " election requests to services with higher process id");
+
+        log.info("[S] Sent " + higherNumberProcess + " election requests to services with higher process id");
 
         if (setAsMaster) {
             setNewMaster();
         }
-
     }
 
+    /**
+     * Method that sets a secondary as a new master, and informs all other secondaries about the updated.
+     * Builds a body for the update request containing all necessary data
+     */
     private void setNewMaster() {
-        System.out.println("[S] Setting myself as the new master");
-        String path = "/election";
-
+        log.info("[S] Setting myself as the new master");
         nodeInfo.setAsMaster();
+
+        String path = "/election";
         JSONObject obj = userDataMap.buildMapObject();
+        List<NodeInfo> secondaries =  secondariesMemberData.getUserServicesListCopy();
+
         obj.put("host", nodeInfo.getHost());
         obj.put("port", nodeInfo.getPort());
         obj.put("version", version.intValue());
-        List<NodeInfo> secondaries =  userServiceNodeData.getUserServicesListCopy();
+        obj.put("userID", userid.intValue());
+
         for (NodeInfo info : secondaries) {
-            int status = servletHelper.sendPostRequest(info.getHost(), info.getPort(), path, obj.toJSONString());
-            if (status != 200) {
-                //TODO: Remove node and send request
-            }
+            serviceHelper.sendPostRequest(info.getHost(), info.getPort(), path, obj.toJSONString());
         }
 
-        for (NodeInfo info : frontendNodeData.getFrontendListCopy()) {
-            int status = servletHelper.sendPostRequest(info.getHost(), info.getPort(), path, obj.toJSONString());
-            if (status != 200) {
-                //TODO: Remove frontend
-            }
-        }
-    }
-
-
-    private int sendGetElection(String host, int port){
-        String path = "election";
-        try {
-            String url = "http://" + host + ":" + port + "/" + path;
-            URL obj = new URL(url);
-            HttpURLConnection con = (HttpURLConnection) obj.openConnection();
-            con.setRequestMethod("GET");
-            return con.getResponseCode();
-
-        } catch (IOException e) {
-            return 401;
+        for (NodeInfo info : frontendMemberData.getFrontendListCopy()) {
+            serviceHelper.sendPostRequest(info.getHost(), info.getPort(), path, obj.toJSONString());
         }
     }
 }

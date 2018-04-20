@@ -1,9 +1,6 @@
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * @Author Gudbrand Schistad
@@ -14,7 +11,7 @@ public class User {
     private String username;
     JSONArray ticketArray = null;
 
-    /*** constructor*/
+    /** constructor */
     public User(int userid, String username) {
         this.userid = userid;
         this.username = username;
@@ -55,7 +52,7 @@ public class User {
      * @param eventid Id of the event
      * @param numTickets Number of tickets purchased/transferred
      */
-    public void addTickets(int eventid, int numTickets) {
+    public synchronized void addTickets(int eventid, int numTickets) {
         for(int i = 0; i < numTickets; i++){
             JSONObject obj = new JSONObject();
             obj.put("eventid", eventid);
@@ -103,10 +100,12 @@ public class User {
         return this.ticketArray;
     }
 
+    /** @return userid*/
     public int getUserid() {
         return userid;
     }
 
+    /** @return array of all tickets for the object*/
     public JSONArray getTicketArray() {
         return ticketArray;
     }
@@ -119,6 +118,7 @@ public class User {
         return this.ticketArray.size();
     }
 
+    /** Method used to update ticket array */
     public void updateTicketArray(JSONArray newArray){
         this.ticketArray.clear();
         this.ticketArray.addAll(newArray);

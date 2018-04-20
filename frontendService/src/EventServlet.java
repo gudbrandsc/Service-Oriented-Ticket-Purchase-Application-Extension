@@ -1,4 +1,6 @@
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.http.HttpStatus;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -21,6 +23,7 @@ import java.util.regex.Pattern;
 public class EventServlet extends HttpServlet{
     private PropertiesLoader properties;
     private UserServiceMaster masterInfo;
+    private  static Logger log = LogManager.getLogger();
 
 
     /** Constructor*/
