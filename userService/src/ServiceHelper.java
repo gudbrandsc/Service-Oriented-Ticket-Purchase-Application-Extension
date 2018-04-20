@@ -80,12 +80,12 @@ public class ServiceHelper {
     }
 
     /**
-     * Method to read the inputstream and append it to a string
+     * Method to read the InputStream and append it to a string
      * @param con between services
      * @return response string
      */
     public static String readInputStream(HttpURLConnection con) throws IOException {
-        StringBuffer response = new StringBuffer();
+        StringBuilder response = new StringBuilder();
 
         BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
         String inputLine;

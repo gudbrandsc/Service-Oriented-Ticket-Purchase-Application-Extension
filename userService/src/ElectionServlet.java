@@ -23,18 +23,18 @@ public class ElectionServlet extends HttpServlet {
     private SecondariesMemberData secondariesMemberData;
     private  UserDataMap userDataMap;
     private  AtomicInteger version;
-    private  AtomicInteger userid;
+    private  AtomicInteger userID;
     private  static Logger log = LogManager.getLogger();
 
     /** Constructor */
     public ElectionServlet(NodeInfo nodeInfo, SecondariesMemberData secondariesMemberData,
-                           UserDataMap userDataMap, AtomicInteger version, AtomicInteger userid) {
+                           UserDataMap userDataMap, AtomicInteger version, AtomicInteger userID) {
         this.nodeInfo = nodeInfo;
         this.serviceHelper = new ServiceHelper();
         this.secondariesMemberData = secondariesMemberData;
         this.userDataMap = userDataMap;
         this.version = version;
-        this.userid = userid;
+        this.userID = userID;
     }
 
     /**
@@ -72,9 +72,9 @@ public class ElectionServlet extends HttpServlet {
         version.set(versionNumber);
         log.info("[S] Updated to version: " + version.intValue());
 
-        int masterUserid = Integer.parseInt(requestBody.get("userID").toString());
-        userid.set(masterUserid);
-        log.info("[S] Updated userid to : " + userid.intValue());
+        int masterUserID = Integer.parseInt(requestBody.get("userID").toString());
+        userID.set(masterUserID);
+        log.info("[S] Updated userID to : " + userID.intValue());
 
         updateUserData(newUserData);
         resp.setStatus(HttpStatus.OK_200);
@@ -85,14 +85,12 @@ public class ElectionServlet extends HttpServlet {
      * @param userdata userdata extracted from the request body
      */
     private void updateUserData(JSONArray userdata){
-        ConcurrentHashMap<Integer, User> updatedUserData = new ConcurrentHashMap<Integer, User>();
-        Iterator<JSONObject> it = userdata.iterator();
-        while(it.hasNext()){
-            JSONObject obj = it.next();
+        ConcurrentHashMap<Integer, User> updatedUserData = new ConcurrentHashMap<>();
+        for (JSONObject obj : (Iterable<JSONObject>) userdata) {
             String username = obj.get("username").toString();
-            int userid = Integer.valueOf(obj.get("userid").toString());
-            User newUser = new User(userid, username);
-            updatedUserData.put(userid,newUser);
+            int objUserID = Integer.valueOf(obj.get("userid").toString());
+            User newUser = new User(objUserID, username);
+            updatedUserData.put(objUserID, newUser);
             JSONArray ticketList = (JSONArray) obj.get("tickets");
             newUser.updateTicketArray(ticketList);
         }

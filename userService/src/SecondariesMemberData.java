@@ -37,9 +37,7 @@ public class SecondariesMemberData {
      */
     public synchronized List<NodeInfo> getUserServicesListCopy() {
         List<NodeInfo> copy = new ArrayList<>();
-        for (NodeInfo copynode : this.userServicesList){
-            copy.add(copynode);
-        }
+        copy.addAll(this.userServicesList);
         return copy;
     }
 
@@ -53,7 +51,7 @@ public class SecondariesMemberData {
     public synchronized void RemoveNode(String host, int port){
         List<NodeInfo> updatedList = Collections.synchronizedList(new ArrayList<NodeInfo>());
         for(NodeInfo info : this.userServicesList){
-            if(info.getPort() != port && info.getHost() != host){
+            if(info.getPort() != port && !info.getHost().equals(host)){
                 updatedList.add(info);
             }
         }

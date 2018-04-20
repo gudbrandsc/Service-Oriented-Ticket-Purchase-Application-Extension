@@ -36,9 +36,7 @@ public class FrontendMemberData {
      */
     public synchronized List<NodeInfo> getFrontendListCopy() {
         List<NodeInfo> copy = new ArrayList<>();
-        for (NodeInfo copynode : this.frontendList){
-            copy.add(copynode);
-        }
+        copy.addAll(this.frontendList);
         return copy;
     }
 
@@ -51,7 +49,7 @@ public class FrontendMemberData {
     public synchronized void RemoveNode(NodeInfo nodeInfo){
         List<NodeInfo> updatedList = Collections.synchronizedList(new ArrayList<NodeInfo>());
         for(NodeInfo info : this.frontendList){
-            if(info.getPort() != nodeInfo.getPort() && info.getHost() != nodeInfo.getHost()){
+            if(info.getPort() != nodeInfo.getPort() && info.getHost().equals(nodeInfo.getHost())){
                 updatedList.add(info);
             }
         }

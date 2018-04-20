@@ -3,7 +3,6 @@ import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.http.HttpStatus;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -13,26 +12,30 @@ import java.io.PrintWriter;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
-public class NodeRegistationServlet extends HttpServlet {
+/**
+ * @author Gudbrand Schistad
+ * Class servlet that is used to register secondaries and frontend services
+ */
+public class NodeRegistrationServlet extends HttpServlet {
     private NodeInfo nodeInfo;
     private FrontendMemberData frontendMemberData;
     private SecondariesMemberData secondariesMemberData;
     private ServiceHelper serviceHelper;
     private UserDataMap userDataMap;
     private final AtomicInteger version;
-    private final AtomicInteger userid;
+    private final AtomicInteger userID;
     private  static Logger log = LogManager.getLogger();
 
-
-    public NodeRegistationServlet(NodeInfo nodeInfo, FrontendMemberData frontendMemberData, SecondariesMemberData secondariesMemberData,
-                                  UserDataMap userDataMap, AtomicInteger version, AtomicInteger userid) {
+    /** Constructor */
+    public NodeRegistrationServlet(NodeInfo nodeInfo, FrontendMemberData frontendMemberData, SecondariesMemberData secondariesMemberData,
+                                   UserDataMap userDataMap, AtomicInteger version, AtomicInteger userID) {
         this.nodeInfo = nodeInfo;
         this.frontendMemberData = frontendMemberData;
         this.secondariesMemberData = secondariesMemberData;
         this.serviceHelper = new ServiceHelper();
         this.userDataMap = userDataMap;
         this.version = version;
-        this.userid = userid;
+        this.userID = userID;
     }
 
     @Override
@@ -62,7 +65,6 @@ public class NodeRegistationServlet extends HttpServlet {
             registerFrontend(resp, requestBody, newNode);
         } else if(pathInfo.equals("/userservice")) {
             registerSecondary(resp, requestBody, newNode);
-            //Response with all data
         }
     }
 
@@ -88,7 +90,7 @@ public class NodeRegistationServlet extends HttpServlet {
         obj.put("userservices", userServices);
         obj.put("users", userDataMap.buildMapObject());
         obj.put("version", version.intValue());
-        obj.put("userID", userid.intValue());
+        obj.put("userID", userID.intValue());
 
         return obj.toJSONString();
     }

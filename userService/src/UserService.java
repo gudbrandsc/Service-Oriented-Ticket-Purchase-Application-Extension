@@ -12,18 +12,16 @@ import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * @Author Gudbrand Schistad
+ * @author Gudbrand Schistad
  * Class that starts the user service server, and maps all requests to the correct servlet.
  */
 public class UserService {
     private static NodeInfo nodeInfo;
-    private static PropertiesLoader properties;
     private static FrontendMemberData frontendMemberData;
     private static SecondariesMemberData secondariesMemberData;
     private static UserDataMap userDataMap;
-    private static NodeElector nodeElector;
     private static AtomicInteger version = new AtomicInteger(1);
-    private static AtomicInteger userid = new AtomicInteger(1);
+    private static AtomicInteger userID = new AtomicInteger(1);
     private static Logger log = LogManager.getLogger();
 
     /**
@@ -33,7 +31,7 @@ public class UserService {
     public static void main(String[] args) {
 
         nodeInfo = null;
-        properties = new PropertiesLoader();
+        PropertiesLoader properties = new PropertiesLoader();
         frontendMemberData = new FrontendMemberData();
         secondariesMemberData = new SecondariesMemberData();
         userDataMap = new UserDataMap();
@@ -62,11 +60,11 @@ public class UserService {
         Server server = new Server(nodeInfo.getPort());
         ServletHandler handler = new ServletHandler();
         server.setHandler(handler);
-        handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userid, secondariesMemberData, nodeInfo,properties, version)), "/*");
-        handler.addServletWithMapping(new ServletHolder(new NodeRegistationServlet(nodeInfo, frontendMemberData, secondariesMemberData, userDataMap, version, userid)), "/register/*");
+        handler.addServletWithMapping(new ServletHolder(new UserServiceServlet(userDataMap, userID, secondariesMemberData, nodeInfo, properties, version)), "/*");
+        handler.addServletWithMapping(new ServletHolder(new NodeRegistrationServlet(nodeInfo, frontendMemberData, secondariesMemberData, userDataMap, version, userID)), "/register/*");
         handler.addServletWithMapping(HeartServlet.class, "/alive");
         handler.addServletWithMapping(new ServletHolder(new NodeRemoverServlet(secondariesMemberData, frontendMemberData)), "/remove/*");
-        handler.addServletWithMapping(new ServletHolder(new ElectionServlet(nodeInfo, secondariesMemberData, userDataMap, version, userid)), "/election/*");
+        handler.addServletWithMapping(new ServletHolder(new ElectionServlet(nodeInfo, secondariesMemberData, userDataMap, version, userID)), "/election/*");
 
 
         if(!nodeInfo.isMaster()){
@@ -76,7 +74,7 @@ public class UserService {
                 System.exit(-1);
             }
         }
-        nodeElector = new NodeElector(secondariesMemberData, nodeInfo, frontendMemberData, userDataMap, version, userid);
+        NodeElector nodeElector = new NodeElector(secondariesMemberData, nodeInfo, frontendMemberData, userDataMap, version, userID);
         log.info("Starting server on port " + nodeInfo.getPort() + "...");
         log.info("Server is master: " + nodeInfo.isMaster() + "...");
         new Thread(new HeartBeat(nodeInfo, secondariesMemberData, frontendMemberData, nodeElector)).start();
@@ -119,7 +117,7 @@ public class UserService {
 
     /**
      * Method that sends a registration request to the master service
-     * @return reponsetype
+     * @return HttpURLConnection
      * */
     private static HttpURLConnection sendRegistrationRequest() throws IOException {
         JSONObject body = new JSONObject();
@@ -181,9 +179,9 @@ public class UserService {
         while(it.hasNext()){
             JSONObject obj = it.next();
             String username = obj.get("username").toString();
-            int userid = Integer.valueOf(obj.get("userid").toString());
-            User newUser = new User(userid, username);
-            userDataMap.addUser(userid, newUser);
+            int curUserID = Integer.valueOf(obj.get("userid").toString());
+            User newUser = new User(curUserID, username);
+            userDataMap.addUser(curUserID, newUser);
             JSONArray ticketList = (JSONArray) obj.get("tickets");
             newUser.updateTicketArray(ticketList);
         }
@@ -204,7 +202,7 @@ public class UserService {
      */
     private static void setUserIdValue(JSONObject responseData){
         int value =Integer.valueOf(responseData.get("userID").toString());
-        userid.set(value);
-        log.info("[S] Setting user ID  as " + userid.intValue());
+        userID.set(value);
+        log.info("[S] Setting user ID  as " + userID.intValue());
     }
 }

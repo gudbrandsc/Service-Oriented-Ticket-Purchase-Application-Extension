@@ -15,19 +15,19 @@ public class NodeElector {
     private  NodeInfo nodeInfo;
     private  UserDataMap userDataMap;
     private  AtomicInteger version;
-    private AtomicInteger userid;
+    private AtomicInteger userID;
     private  static Logger log = LogManager.getLogger();
 
     /** Constructor */
     public NodeElector(SecondariesMemberData secondariesMemberData, NodeInfo nodeInfo, FrontendMemberData frontendMemberData,
-                       UserDataMap userDataMap, AtomicInteger version, AtomicInteger userid) {
+                       UserDataMap userDataMap, AtomicInteger version, AtomicInteger userID) {
         this.secondariesMemberData = secondariesMemberData;
         this.serviceHelper = new ServiceHelper();
         this.nodeInfo = nodeInfo;
         this.frontendMemberData = frontendMemberData;
         this.userDataMap = userDataMap;
         this.version = version;
-        this.userid = userid;
+        this.userID = userID;
     }
 
     /**
@@ -47,6 +47,9 @@ public class NodeElector {
                 higherNumberProcess++;
                 if (serviceHelper.sendGetAndReturnStatus(info.getHost(), info.getPort(), path) == 200) {
                     setAsMaster = false;
+                    break;
+                    // Break will exist the loop closest to it
+                    // See: https://docs.oracle.com/javase/tutorial/java/nutsandbolts/branch.html
                 }
             }
         }
@@ -73,7 +76,7 @@ public class NodeElector {
         obj.put("host", nodeInfo.getHost());
         obj.put("port", nodeInfo.getPort());
         obj.put("version", version.intValue());
-        obj.put("userID", userid.intValue());
+        obj.put("userID", userID.intValue());
 
         for (NodeInfo info : secondaries) {
             serviceHelper.sendPostRequest(info.getHost(), info.getPort(), path, obj.toJSONString());

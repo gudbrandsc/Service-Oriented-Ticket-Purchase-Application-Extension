@@ -1,11 +1,7 @@
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.http.HttpStatus;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
-
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -17,13 +13,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * @Author Gudbrand Schistad, Omar Sharif
+ * @author Gudbrand Schistad
  * Servlet class that handles all get and post requests.
  */
 public class EventServlet extends HttpServlet{
     private PropertiesLoader properties;
     private UserServiceMaster masterInfo;
-    private  static Logger log = LogManager.getLogger();
 
 
     /** Constructor*/
@@ -51,7 +46,7 @@ public class EventServlet extends HttpServlet{
         Matcher matchTransfer = transfer.matcher(eventid);
 
         if(matchTransfer.matches()){
-            JSONObject event = sendGetRequest(properties.getEventhost(), properties.getEventport(), matchTransfer.group(1), resp);
+            JSONObject event = sendGetRequest(properties.getEventHost(), properties.getEventPort(), matchTransfer.group(1), resp);
             printWriter.println(event);
             printWriter.flush();
         }else {
@@ -76,7 +71,7 @@ public class EventServlet extends HttpServlet{
         Matcher m = p.matcher(pathInfo);
 
         if(pathInfo.equals("/create")){
-            sendPostRequestAndPrint(properties.getEventhost(), properties.getEventport(), pathInfo, resp, req);
+            sendPostRequestAndPrint(properties.getEventHost(), properties.getEventPort(), pathInfo, resp, req);
         }else if(m.matches()){
             int  eventid = Integer.parseInt(m.group(1));
             int  userid = Integer.parseInt(m.group(2));
@@ -101,7 +96,7 @@ public class EventServlet extends HttpServlet{
     private String requestToString(HttpServletRequest req) throws IOException {
         String line;
 
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         BufferedReader in = req.getReader();
 
         while ((line = in.readLine()) != null) {
@@ -129,12 +124,12 @@ public class EventServlet extends HttpServlet{
     }
 
     /**
-     * Method to read the inputstream and append it to a string
+     * Method to read the InputStream and append it to a string
      * @param con between services
      * @return response string
      */
     private String readInputStream(HttpURLConnection con) throws IOException {
-        StringBuffer response = new StringBuffer();
+        StringBuilder response = new StringBuilder();
 
         BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
         String inputLine;

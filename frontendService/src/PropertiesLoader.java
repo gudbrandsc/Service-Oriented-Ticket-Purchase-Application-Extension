@@ -33,13 +33,13 @@ public class PropertiesLoader {
     }
 
 
-    public String getEventhost() {
+    public String getEventHost() {
         return eventhost;
     }
 
 
 
-    public String getEventport() {
+    public String getEventPort() {
         return eventport;
     }
 }

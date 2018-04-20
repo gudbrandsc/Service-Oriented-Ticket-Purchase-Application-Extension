@@ -46,7 +46,7 @@ public class HeartBeat implements Runnable{
                 List<NodeInfo> secondaries = secondariesMemberData.getUserServicesListCopy();
                 List<NodeInfo> frontends = frontendMemberData.getFrontendListCopy();
                 sendHearBeatToSecondaries(secondaries);
-                sendHearBeatTofrontends(secondaries, frontends);
+                sendHearBeatToFrontends(secondaries, frontends);
             } else {
                 sendHearBeatToMaster();
             }
@@ -67,7 +67,7 @@ public class HeartBeat implements Runnable{
      */
     private void sendHearBeatToSecondaries(List<NodeInfo> secondaries){
         for(NodeInfo info : secondaries){
-            if(checkIfalive(info.getHost(), info.getPort()) != 200){
+            if(checkIfAlive(info.getHost(), info.getPort()) != 200){
                 log.info("[P] Secondary did not respond to heartbeat " + info.getHost() + ":" + info.getPort());
                 String path = "/remove/userservice";
                 removeDeadNode(info, secondaries, path);
@@ -81,9 +81,9 @@ public class HeartBeat implements Runnable{
      * then remove the secondary from all membership lists
      * @param secondaries list copy of all registered secondaries
      */
-    private void sendHearBeatTofrontends(List<NodeInfo> secondaries, List<NodeInfo> frontends ){
+    private void sendHearBeatToFrontends(List<NodeInfo> secondaries, List<NodeInfo> frontends ){
         for(NodeInfo info : frontends){
-            if(checkIfalive(info.getHost(), info.getPort()) != 200){
+            if(checkIfAlive(info.getHost(), info.getPort()) != 200){
                 log.info("[P] Frontend did not respond to heartbeat");
                 String path = "/remove/frontend";
                 removeDeadNode(info, secondaries, path);
@@ -97,7 +97,7 @@ public class HeartBeat implements Runnable{
      * it will start an election
      */
     private void sendHearBeatToMaster(){
-        if(checkIfalive(nodeInfo.getMasterHost(), nodeInfo.getMasterPort()) != 200){
+        if(checkIfAlive(nodeInfo.getMasterHost(), nodeInfo.getMasterPort()) != 200){
             log.info("[S] Master did not respond to heartbeat...");
             nodeElector.startElection();
         }
@@ -110,7 +110,7 @@ public class HeartBeat implements Runnable{
      * @param port port of the service
      * @return 200 if it got resp and 401 on timeout
      */
-    private int checkIfalive(String host, int port){
+    private int checkIfAlive(String host, int port){
         String path = "alive";
         int respCode;
         try {

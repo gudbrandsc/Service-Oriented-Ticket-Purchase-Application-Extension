@@ -32,7 +32,7 @@ public class MasterHandler extends HttpServlet {
      * @throws IOException
      */
     private String requestToString(HttpServletRequest req) throws IOException {
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         String line;
 
         BufferedReader in = req.getReader();

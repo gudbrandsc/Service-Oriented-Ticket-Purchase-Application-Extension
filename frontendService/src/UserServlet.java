@@ -1,5 +1,4 @@
 import org.eclipse.jetty.http.HttpStatus;
-import org.eclipse.jetty.servlet.ServletHolder;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -16,7 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * @Author Gudbrand Schistad, Omar Sharif
+ * @author Gudbrand Schistad
  * Servlet class that handles all get and post requests.
  */
 public class UserServlet extends HttpServlet{
@@ -44,9 +43,9 @@ public class UserServlet extends HttpServlet{
         JSONObject userObject = sendGetRequest(masterInfo.getUserHost(), masterInfo.getUserPort() , req.getPathInfo().substring(1), resp);
         if(userObject != null){
             JSONObject json = new JSONObject();
-            JSONArray eventarray = (JSONArray) userObject.get("tickets");
-            JSONArray updatedEventarray = new JSONArray();
-            Iterator<JSONObject> iterator = eventarray.iterator();
+            JSONArray eventArray = (JSONArray) userObject.get("tickets");
+            JSONArray updatedEventArray = new JSONArray();
+            Iterator<JSONObject> iterator = eventArray.iterator();
 
             json.put("userid", userObject.get("userid"));
             json.put("username", userObject.get("username"));
@@ -55,13 +54,13 @@ public class UserServlet extends HttpServlet{
                 JSONObject res = iterator.next();
                 long eventid = Long.parseLong(res.get("eventid").toString());
 
-                JSONObject eventObject = sendGetRequest(properties.getEventhost(), Integer.parseInt(properties.getEventport()), String.valueOf(eventid), resp);
+                JSONObject eventObject = sendGetRequest(properties.getEventHost(), Integer.parseInt(properties.getEventPort()), String.valueOf(eventid), resp);
                 if (eventObject != null) {
-                    updatedEventarray.add(eventObject);
+                    updatedEventArray.add(eventObject);
                 }
             }
 
-            json.put("tickets", updatedEventarray);
+            json.put("tickets", updatedEventArray);
             resp.setContentType("application/json; charset=UTF-8");
             resp.setStatus(HttpStatus.OK_200);
             printWriter.println(json.toString());
@@ -104,7 +103,7 @@ public class UserServlet extends HttpServlet{
      * @throws IOException
      */
     private String requestToString(HttpServletRequest req) throws IOException {
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         String line;
 
         BufferedReader in = req.getReader();
@@ -134,12 +133,12 @@ public class UserServlet extends HttpServlet{
     }
 
     /**
-     * Method to read the inputstream and append it to a string
+     * Method to read the InputStream and append it to a string
      * @param con between services
      * @return response string
      */
     private String readInputStream(HttpURLConnection con) throws IOException {
-        StringBuffer response = new StringBuffer();
+        StringBuilder response = new StringBuilder();
 
         BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
         String inputLine;
@@ -170,7 +169,7 @@ public class UserServlet extends HttpServlet{
 
         if (responseCode == 200) {
             String response = readInputStream(con);
-            return stringToJsonObject(response.toString());
+            return stringToJsonObject(response);
         }
         return null;
     }

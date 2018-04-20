@@ -15,12 +15,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * @Author Gudbrand Schistad
+ * @author Gudbrand Schistad
  * Servlet class that handles all get and post requests.
  */
 public class UserServiceServlet extends HttpServlet {
     private UserDataMap userDataMap;
-    private AtomicInteger userid;
+    private AtomicInteger userID;
     private ServiceHelper serviceHelper;
     private SecondariesMemberData secondariesMemberData;
     private NodeInfo nodeInfo;
@@ -30,9 +30,9 @@ public class UserServiceServlet extends HttpServlet {
 
 
     /** Constructor */
-    public UserServiceServlet(UserDataMap userDataMap, AtomicInteger userid, SecondariesMemberData secondariesMemberData, NodeInfo nodeInfo, PropertiesLoader eventService, AtomicInteger version) {
+    public UserServiceServlet(UserDataMap userDataMap, AtomicInteger userID, SecondariesMemberData secondariesMemberData, NodeInfo nodeInfo, PropertiesLoader eventService, AtomicInteger version) {
         this.userDataMap = userDataMap;
-        this.userid = userid;
+        this.userID = userID;
         this.serviceHelper = new ServiceHelper();
         this.secondariesMemberData = secondariesMemberData;
         this.nodeInfo = nodeInfo;
@@ -149,15 +149,17 @@ public class UserServiceServlet extends HttpServlet {
      * Creates a user as a master. Assigns a version number to the request, end replicates it to all secondaries.
      * Returns response status once replication is done
      * @param requestBody body of the request
-     * @param respJSON Json used to return assigned userid to the frontend.
+     * @param respJSON Json used to return assigned userID to the frontend.
      * @return Http status code
      */
     private int createUserAsMaster(JSONObject requestBody, JSONObject respJSON){
-        int setUserId = userid.getAndIncrement();
+        int setUserId = userID.getAndIncrement();
         User user = new User(setUserId, requestBody.get("username").toString());
 
-        userDataMap.addUser(setUserId, user);
-        requestBody.put("version", version.getAndIncrement());
+        synchronized (version) {
+            userDataMap.addUser(setUserId, user);
+            requestBody.put("version", version.getAndIncrement());
+        }
 
         log.info("[P] Adding new user with user id: " + setUserId);
         String path = "/create";
@@ -184,7 +186,7 @@ public class UserServiceServlet extends HttpServlet {
                 version.wait();
             }
 
-            int setUserId = userid.getAndIncrement();
+            int setUserId = userID.getAndIncrement();
             version.getAndIncrement();
             User user = new User(setUserId, requestBody.get("username").toString());
             userDataMap.addUser(setUserId, user);
@@ -232,10 +234,13 @@ public class UserServiceServlet extends HttpServlet {
         String purchaseEventPath = "/purchase/" + eventid;
         //If the event service returns 200, then add tickets to data structure and replicate.
         if(serviceHelper.sendPostRequest(eventService.getEventhost(), Integer.valueOf(eventService.getEventport()), purchaseEventPath, eventRequestBody.toJSONString()) == 200){
-            userDataMap.getUser(requestUserId).addTickets(eventid, tickets);
             log.info("[P] Adding " + tickets + " tickets for eventID " + eventid + " to user with userID " + requestUserId);
             String path = "/" + requestUserId + "/tickets/add" ;
-            requestBody.put("version", version.getAndIncrement());
+            synchronized (version) {
+                requestBody.put("version", version.getAndIncrement());
+                userDataMap.getUser(requestUserId).addTickets(eventid, tickets);
+            }
+
             return serviceHelper.replicateToSecondaries(path, requestBody.toJSONString(), secondariesMemberData);
         }else {
             return HttpStatus.BAD_REQUEST_400;
@@ -276,9 +281,9 @@ public class UserServiceServlet extends HttpServlet {
         int tickets = Integer.parseInt(requestBody.get("tickets").toString());
         int targetuser = Integer.parseInt(requestBody.get("targetuser").toString());
         if(nodeInfo.isMaster()) {
-            resp.setStatus(transfereAsMaster(requestBody, requestUserId, targetuser, eventid, tickets));
+            resp.setStatus(transferAsMaster(requestBody, requestUserId, targetuser, eventid, tickets));
         }else {
-           resp.setStatus(transfereAsSecondary(requestBody, requestUserId, targetuser, eventid, tickets));
+            resp.setStatus(transfereAsSecondary(requestBody, requestUserId, targetuser, eventid, tickets));
         }
     }
 
@@ -291,15 +296,17 @@ public class UserServiceServlet extends HttpServlet {
      * @param eventid id of the event
      * @param tickets number of tickets to transfer
      */
-    private int transfereAsMaster (JSONObject requestBody, int requestUserId, int targetuser, int eventid, int tickets) {
+    private int transferAsMaster(JSONObject requestBody, int requestUserId, int targetuser, int eventid, int tickets) {
         if (userDataMap.checkIfUserExist(targetuser) && userDataMap.checkIfUserExist(requestUserId)) {
-            if (transferTickets(eventid, requestUserId, targetuser, tickets)) {
-                log.info("[P] Transferring  " + tickets + " tickets from userID " + requestUserId + " to userID: " + targetuser);
-                String path = "/" + requestUserId + "/tickets/transfer";
-                requestBody.put("version", version.getAndIncrement());
-                return serviceHelper.replicateToSecondaries(path, requestBody.toJSONString(), secondariesMemberData);
-            } else {
-                return HttpStatus.BAD_REQUEST_400;
+            synchronized (version){
+                if (transferTickets(eventid, requestUserId, targetuser, tickets)) {
+                    log.info("[P] Transferring  " + tickets + " tickets from userID " + requestUserId + " to userID: " + targetuser);
+                    String path = "/" + requestUserId + "/tickets/transfer";
+                    requestBody.put("version", version.getAndIncrement());
+                    return serviceHelper.replicateToSecondaries(path, requestBody.toJSONString(), secondariesMemberData);
+                } else {
+                    return HttpStatus.BAD_REQUEST_400;
+                }
             }
         } else {
             return HttpStatus.BAD_REQUEST_400;

@@ -3,7 +3,7 @@ import org.json.simple.JSONObject;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * @Author Gudbrand Schistad
+ * @author Gudbrand Schistad
  * Class containing a Concurrent HashMap.
  */
 public class UserDataMap {
@@ -11,7 +11,7 @@ public class UserDataMap {
 
     /** Constructor */
     public UserDataMap() {
-        this.userData =  new ConcurrentHashMap<Integer, User>();
+        this.userData =  new ConcurrentHashMap<>();
     }
 
     /** Method used to add a user to the map
@@ -34,7 +34,7 @@ public class UserDataMap {
     }
 
     /**
-     * Method used to check if the map contains the userid
+     * Method used to check if the map contains the userID
      * @param userId Id of the user(key)
      * @return True if user exist, else false.
      */
@@ -48,7 +48,7 @@ public class UserDataMap {
         JSONArray usersInfo = new JSONArray();
         for(User user : userData.values()){
             JSONObject userObj = new JSONObject();
-            userObj.put("userid",user.getUserid());
+            userObj.put("userid",user.getUserID());
             userObj.put("username", user.getUsername());
             userObj.put("tickets", user.getTicketArray());
             usersInfo.add(userObj);

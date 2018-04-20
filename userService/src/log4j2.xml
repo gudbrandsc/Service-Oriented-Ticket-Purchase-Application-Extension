@@ -9,7 +9,7 @@
 	</Console>
 
 	<!-- Logging to a file for debugging -->
-	<File name="FileLog" fileName="./userservice3/debug.log" append="false">
+	<File name="FileLog" fileName="./userservice2/debug.log" append="false">
 		<PatternLayout
 				pattern="[%-5level{lowerCase=true}] %m%n">
 		</PatternLayout>

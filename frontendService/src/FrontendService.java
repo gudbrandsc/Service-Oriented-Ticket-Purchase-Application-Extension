@@ -4,16 +4,12 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.json.simple.JSONObject;
-
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.net.*;
 
 /**
- * @Author Gudbrand Schistad, Omar Sharif
+ * @author Gudbrand Schistad
  * Class that starts the frontend service server, and maps all requests to the correct servlet.
  */
 public class FrontendService {

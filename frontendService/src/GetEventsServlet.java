@@ -10,7 +10,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * @Author Gudbrand Schistad, Omar Sharif
+ * @author Gudbrand Schistad
  * Servlet class that handles all get and post requests.
  */
 public class GetEventsServlet extends HttpServlet {
@@ -32,14 +32,14 @@ public class GetEventsServlet extends HttpServlet {
         int responseCode;
 
         PrintWriter printWriter = resp.getWriter();
-        url = "http://" + properties.getEventhost() + ":" + properties.getEventport() + "/list";
+        url = "http://" + properties.getEventHost() + ":" + properties.getEventPort() + "/list";
         URL obj = new URL(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
         con.setRequestMethod("GET");
         responseCode = con.getResponseCode();
         resp.setStatus(responseCode);
         if (responseCode == 200) {
-            StringBuffer response = new StringBuffer();
+            StringBuilder response = new StringBuilder();
             BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
 
             while ((inputLine = in.readLine()) != null) {

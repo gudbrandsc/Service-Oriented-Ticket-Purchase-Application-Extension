@@ -3,13 +3,13 @@ import org.json.simple.JSONObject;
 import java.util.*;
 
 /**
- * @Author Gudbrand Schistad
+ * @author Gudbrand Schistad
  * Class used to create a user object, that is stored in the user datamap.
  */
 public class User {
     private int userid;
     private String username;
-    JSONArray ticketArray = null;
+    private JSONArray ticketArray = null;
 
     /** constructor */
     public User(int userid, String username) {
@@ -26,11 +26,9 @@ public class User {
      */
     public boolean validateNumTickets(int eventid, int numTickets) {
         int count = 0;
-        Iterator<JSONObject> it = this.ticketArray.iterator();
-        while(it.hasNext()){
-            JSONObject obj = it.next();
+        for (JSONObject obj : (Iterable<JSONObject>) this.ticketArray) {
             int value = (int) Long.parseLong(obj.get("eventid").toString());
-            if(value == eventid){
+            if (value == eventid) {
                 count++;
             }
         }
@@ -72,18 +70,17 @@ public class User {
         int count = 0;
         boolean removedAll = false;
         JSONArray newArray = new JSONArray();
-        Iterator<JSONObject> it = ticketArray.iterator();
 
-        while(it.hasNext()){
-            if(count == numTickets){
+        for (JSONObject aTicketArray : (Iterable<JSONObject>) ticketArray) {
+            if (count == numTickets) {
                 removedAll = true;
             }
-            JSONObject obj = it.next();
+            JSONObject obj = aTicketArray;
             int value = (int) Long.parseLong(obj.get("eventid").toString());
 
-            if(value == eventid && !removedAll){
+            if (!(value == eventid && !removedAll)) {
 
-            }else{
+            } else {
                 newArray.add(obj);
             }
             count++;
@@ -101,7 +98,7 @@ public class User {
     }
 
     /** @return userid*/
-    public int getUserid() {
+    public int getUserID() {
         return userid;
     }
 
@@ -111,7 +108,7 @@ public class User {
     }
 
     /**
-     * Method to get the number of elements in the hashmap
+     * Method to get the number of elements in the hashMap
      * @return The size of events map
      */
     public int getNumEventsSize() {
